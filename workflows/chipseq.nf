@@ -21,6 +21,7 @@ include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_chip
 include { INPUT_CHECK            } from '../subworkflows/local/input_check'
 include { ALIGN_STAR             } from '../subworkflows/local/align_star'
 include { BAM_FILTER_BAMTOOLS    } from '../subworkflows/local/bam_filter_bamtools'
+include { BAM_MULTIMAP_REPEATS   } from '../subworkflows/local/bam_multimap_repeats'
 include { BAM_BEDGRAPH_BIGWIG_BEDTOOLS_UCSC                       } from '../subworkflows/local/bam_bedgraph_bigwig_bedtools_ucsc'
 include { BAM_PEAKS_CALL_QC_ANNOTATE_MACS3_HOMER                  } from '../subworkflows/local/bam_peaks_call_qc_annotate_macs3_homer.nf'
 include { BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2 } from '../subworkflows/local/bed_consensus_quantify_qc_bedtools_featurecounts_deseq2.nf'
@@ -64,6 +65,11 @@ include { BAM_MARKDUPLICATES_PICARD        } from '../subworkflows/nf-core/bam_m
 // JSON files required by BAMTools for alignment filtering
 ch_bamtools_filter_se_config = file(params.bamtools_filter_se_config)
 ch_bamtools_filter_pe_config = file(params.bamtools_filter_pe_config)
+
+// Optional BED file of repeat annotations for multi-mapped read coverage analysis
+ch_repeat_masker_bed = params.repeat_masker_bed
+    ? Channel.value(file(params.repeat_masker_bed, checkIfExists: true))
+    : Channel.empty()
 
 // Header files for MultiQC
 ch_spp_nsc_header           = file("$projectDir/assets/multiqc/spp_nsc_header.txt", checkIfExists: true)
@@ -265,6 +271,18 @@ workflow CHIPSEQ {
             }
     )
     ch_versions = ch_versions.mix(BAM_MARKDUPLICATES_PICARD.out.versions)
+
+    //
+    // SUBWORKFLOW: Separate multi-mapped reads (instead of discarding them) and quantify
+    //              their coverage over repetitive genome elements
+    //
+    if (!params.skip_multimap_repeats && params.repeat_masker_bed) {
+        BAM_MULTIMAP_REPEATS (
+            BAM_MARKDUPLICATES_PICARD.out.bam.join(BAM_MARKDUPLICATES_PICARD.out.bai, by: [0]),
+            ch_repeat_masker_bed
+        )
+        ch_versions = ch_versions.mix(BAM_MULTIMAP_REPEATS.out.versions)
+    }
 
     //
     // SUBWORKFLOW: Filter BAM file with BamTools

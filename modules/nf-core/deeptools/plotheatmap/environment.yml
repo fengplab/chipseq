@@ -7,3 +7,5 @@ channels:
   - defaults
 dependencies:
   - "bioconda::deeptools=3.5.5"
+  # pin: deeptools 3.5.5 still calls the removed np.NAN alias (NumPy >=2.0)
+  - "conda-forge::numpy<2"
