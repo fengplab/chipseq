@@ -147,6 +147,30 @@ def validateInputParameters() {
     if (!params.read_length && !params.macs_gsize) {
         error ("Both '--read_length' and '--macs_gsize' not specified! Please specify either to infer MACS3 genome size for peak calling.")
     }
+
+    if (params.with_allo && params.aligner != 'bowtie2') {
+        error("'--with_allo' is only supported with '--aligner bowtie2' (Allo needs Bowtie2 multi-mapped read output).")
+    }
+
+    if (params.with_allo && params.keep_multi_map == false) {
+        log.info "[Allo] Multi-mapped reads are allocated by Allo; the BAMTools MAPQ filter (-q 1) is disabled so rescued reads are kept."
+    }
+
+    if (params.annotate_features && !(params.repeatmasker_bigbed || params.repeatmasker_annotation || params.run_repeatmasker || params.censat_bigbed || params.censat_bed)) {
+        error("'--annotate_features' requires at least one of '--repeatmasker_bigbed', '--repeatmasker_annotation', '--run_repeatmasker', '--censat_bigbed' or '--censat_bed'.")
+    }
+
+    if (!params.annotate_features && (params.repeatmasker_bigbed || params.repeatmasker_annotation || params.censat_bigbed || params.censat_bed)) {
+        log.warn "RepeatMasker/CenSat files were provided but '--annotate_features' is not set; they will be ignored."
+    }
+
+    if (params.run_differential && params.skip_consensus_peaks) {
+        error("'--run_differential' requires consensus peaks; do not combine it with '--skip_consensus_peaks'.")
+    }
+
+    if (params.feature_min_overlap <= 0 || params.feature_min_overlap > 1) {
+        error("'--feature_min_overlap' must be a fraction in (0, 1], e.g. 0.8 for 80%.")
+    }
 }
 
 //

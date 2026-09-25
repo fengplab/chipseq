@@ -63,6 +63,7 @@ workflow BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2 {
     //
     // Annotate consensus peaks
     //
+    ch_consensus_annotate_txt = Channel.empty()
     if (!skip_peak_annotation) {
         HOMER_ANNOTATEPEAKS (
             MACS3_CONSENSUS.out.bed,
@@ -77,6 +78,7 @@ workflow BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2 {
         ANNOTATE_BOOLEAN_PEAKS (
             MACS3_CONSENSUS.out.boolean_txt.join(HOMER_ANNOTATEPEAKS.out.txt, by: [0]),
         )
+        ch_consensus_annotate_txt = ANNOTATE_BOOLEAN_PEAKS.out.annotate_peaks_txt
         ch_versions = ch_versions.mix(ANNOTATE_BOOLEAN_PEAKS.out.versions)
     }
 
@@ -140,6 +142,7 @@ workflow BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2 {
     consensus_txt           = MACS3_CONSENSUS.out.txt           // channel: [ pdf ]
     consensus_boolean_txt   = MACS3_CONSENSUS.out.boolean_txt   // channel: [ txt ]
     consensus_intersect_txt = MACS3_CONSENSUS.out.intersect_txt // channel: [ txt ]
+    consensus_annotate_txt  = ch_consensus_annotate_txt         // channel: [ val(meta), txt ] HOMER + boolean annotation
 
     featurecounts_txt       = SUBREAD_FEATURECOUNTS.out.counts  // channel: [ txt ]
     featurecounts_summary   = SUBREAD_FEATURECOUNTS.out.summary // channel: [ txt ]

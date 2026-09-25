@@ -10,6 +10,24 @@
 
 ## Pipeline tools
 
+- [Allo](https://doi.org/10.1101/gr.278638.123)
+
+  > Morrissey A, et al. Genome Research (2024). doi: 10.1101/gr.278638.123
+
+- [MEME Suite / XSTREME](https://meme-suite.org/meme/doc/xstreme.html)
+
+  > Grant CE, Bailey TL. XSTREME: comprehensive motif analysis of biological sequence datasets. bioRxiv (2021).
+
+  > Bailey TL, Johnson J, Grant CE, Noble WS. The MEME Suite. Nucleic Acids Res. 2015;43(W1):W39-W49.
+
+- [RepeatMasker](https://www.repeatmasker.org)
+
+  > Smit AFA, Hubley R, Green P. RepeatMasker Open-4.0. 2013-2015.
+
+- [CenSat annotation (T2T-CHM13)](https://doi.org/10.1126/science.abl4178)
+
+  > Altemose N, et al. Complete genomic and epigenetic maps of human centromeres. Science. 2022;376(6588):eabl4178.
+
 - [BWA](https://www.ncbi.nlm.nih.gov/pubmed/19451168/)
 
   > Li H, Durbin R. Fast and accurate short read alignment with Burrows-Wheeler transform. Bioinformatics. 2009 Jul 15;25(14):1754-60. doi: 10.1093/bioinformatics/btp324. Epub 2009 May 18. PubMed PMID: 19451168; PubMed Central PMCID: PMC2705234.

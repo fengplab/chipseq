@@ -128,6 +128,57 @@ wget -L https://www.encodeproject.org/files/ENCFF356LFX/@@download/ENCFF356LFX.b
 
 > **NB:** A detailed description of the different versions of the files can be found [here](https://github.com/Boyle-Lab/Blacklist/blob/master/README.md). Also, to to see which blacklist bed files are assigned by default to the respective reference genome check the [igenomes.config](https://github.com/nf-core/chipseq/blob/master/conf/igenomes.config).
 
+## Optional analyses added to this version
+
+All four additions are off by default.
+
+### Multi-mapped read allocation with Allo
+
+```bash
+nextflow run nf-core/chipseq --aligner bowtie2 --with_allo ...
+```
+
+Bowtie2 is run with `-k 25` (`--allo_max_alignments`; paired-end data also get `--no-mixed --no-discordant`), the raw alignments are grouped by read name with `samtools collate` and written as SAM, and [Allo](https://github.com/seqcode/allo) is run on them with `--mixed`. Allo keeps the SAM record of the location it chooses unchanged, so an allocated read that Bowtie2 reported as a secondary alignment keeps FLAG 0x100 and would be dropped by Picard, MACS3 and featureCounts; the pipeline therefore clears 0x100 on reads carrying Allo's `ZA`/`ZZ` tags. Every downstream step (merging, duplicate marking, filtering, peak calling, ...) then uses the Allo alignments. Because allocated reads keep Bowtie2's low MAPQ, the BAMTools `-q 1` filter is disabled when `--with_allo` is set.
+
+- Container: `quay.io/biocontainers/allo:1.2.0--pyhdfd78af_0` (conda: `bioconda::allo=1.2.0`). Override with `--allo_container`.
+- `--allo_use_local`: no container or conda environment is used for the Allo task; the `allo` executable on the host `$PATH` is run instead (install with `pip install bio-allo`). The task fails with a clear message if `allo` is not found.
+- `--allo_args`: extra Allo arguments, e.g. `'--remove-zeros'`, `'-max 10'` or `'--keep-unmap'`.
+- `--allo_random_control`: also pass `--random` for control samples, as suggested by the Allo authors.
+
+Note that Bowtie2 with `-k` is considerably slower, that Allo removes unmapped reads by default (so library-level mapping rates in MultiQC appear close to 100%), and that an "LIB: Allo multi-mapped read allocation" table is added to MultiQC.
+
+### Motif discovery with XSTREME
+
+```bash
+nextflow run nf-core/chipseq --run_xstreme [--xstreme_motif_db JASPAR.meme] ...
+```
+
+XSTREME is run on the sequences of every per-sample peak set and every consensus peak set with default settings, except `--maxw`, which is set to the length of the shortest read in the final filtered, sorted BAM file (`*.mLb.clN.sorted.bam`) used to call the peaks (for consensus peaks: the shortest across that antibody's samples), read from the samtools stats read-length histogram. STREME, which XSTREME runs, only supports motif widths up to 30, so by default the value is capped at 30 with a warning; use `--xstreme_maxw_cap 0` to pass the read length unchanged. `--xstreme_motif_db` optionally supplies known motifs (`--m`) so discovered motifs are compared with them.
+
+### RepeatMasker / CenSat peak annotation
+
+```bash
+# First run: build the BigBeds from source annotations (or with --run_repeatmasker --repeatmasker_species human)
+nextflow run nf-core/chipseq --annotate_features \
+    --repeatmasker_annotation rmsk.txt.gz --censat_bed censat.bed ...
+
+# Later runs: reuse the BigBeds published in <outdir>/genome/annotation/
+nextflow run nf-core/chipseq --annotate_features \
+    --repeatmasker_bigbed repeatmasker.bb --censat_bigbed censat.bb ...
+```
+
+Sources, in order of precedence: `--repeatmasker_bigbed` > `--repeatmasker_annotation` (RepeatMasker `.out`, UCSC `rmsk.txt[.gz]` or BED) > `--run_repeatmasker` (optionally `--repeatmasker_species`, `--repeatmasker_lib`); `--censat_bigbed` > `--censat_bed`. Remote URLs (e.g. UCSC hub BigBeds) can be passed directly. Chromosome names must match the genome FASTA; features on other sequences are dropped. For BigBeds not built by the pipeline, the feature class is read from an autoSql field named `repClass`/`class`/`type` if present, from RepeatMasker-style names (`AluY#SINE/Alu`), or derived from the name (CenSat: `hsat2_2(...)` -> `hsat2`).
+
+Peaks are reported as covering a feature when they overlap at least `--feature_min_overlap` (default `0.8`, i.e. 80%) of the feature's length.
+
+### Differential binding and visualisation
+
+```bash
+nextflow run nf-core/chipseq --run_differential [--differential_fdr 0.05] [--differential_lfc 1] ...
+```
+
+For each antibody with at least two sample groups and replicates, DESeq2 is run on the consensus-peak counts and every pair of groups (sample name without `_REP<n>`) is compared. Results are plotted together with the HOMER annotation of the consensus peaks and, when `--annotate_features` is also set, the RepeatMasker / CenSat classes those peaks cover.
+
 ## Running the pipeline
 
 The typical command for running the pipeline is as follows:

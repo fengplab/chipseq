@@ -21,10 +21,13 @@ include { methodsDescriptionText } from '../subworkflows/local/utils_nfcore_chip
 include { INPUT_CHECK            } from '../subworkflows/local/input_check'
 include { ALIGN_STAR             } from '../subworkflows/local/align_star'
 include { BAM_FILTER_BAMTOOLS    } from '../subworkflows/local/bam_filter_bamtools'
-include { BAM_MULTIMAP_REPEATS   } from '../subworkflows/local/bam_multimap_repeats'
 include { BAM_BEDGRAPH_BIGWIG_BEDTOOLS_UCSC                       } from '../subworkflows/local/bam_bedgraph_bigwig_bedtools_ucsc'
 include { BAM_PEAKS_CALL_QC_ANNOTATE_MACS3_HOMER                  } from '../subworkflows/local/bam_peaks_call_qc_annotate_macs3_homer.nf'
 include { BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2 } from '../subworkflows/local/bed_consensus_quantify_qc_bedtools_featurecounts_deseq2.nf'
+include { FASTQ_ALIGN_BOWTIE2_ALLO                                } from '../subworkflows/local/fastq_align_bowtie2_allo'
+include { PEAKS_MOTIFS_XSTREME                                    } from '../subworkflows/local/peaks_motifs_xstreme'
+include { PEAKS_ANNOTATE_REPEATMASKER_CENSAT                      } from '../subworkflows/local/peaks_annotate_repeatmasker_censat'
+include { PLOT_DIFFERENTIAL_PEAKS                                 } from '../modules/local/plot_differential_peaks'
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -66,11 +69,6 @@ include { BAM_MARKDUPLICATES_PICARD        } from '../subworkflows/nf-core/bam_m
 ch_bamtools_filter_se_config = file(params.bamtools_filter_se_config)
 ch_bamtools_filter_pe_config = file(params.bamtools_filter_pe_config)
 
-// Optional BED file of repeat annotations for multi-mapped read coverage analysis
-ch_repeat_masker_bed = params.repeat_masker_bed
-    ? Channel.value(file(params.repeat_masker_bed, checkIfExists: true))
-    : Channel.empty()
-
 // Header files for MultiQC
 ch_spp_nsc_header           = file("$projectDir/assets/multiqc/spp_nsc_header.txt", checkIfExists: true)
 ch_spp_rsc_header           = file("$projectDir/assets/multiqc/spp_rsc_header.txt", checkIfExists: true)
@@ -80,6 +78,7 @@ ch_frip_score_header        = file("$projectDir/assets/multiqc/frip_score_header
 ch_peak_annotation_header   = file("$projectDir/assets/multiqc/peak_annotation_header.txt", checkIfExists: true)
 ch_deseq2_pca_header        = Channel.value(file("$projectDir/assets/multiqc/deseq2_pca_header.txt", checkIfExists: true))
 ch_deseq2_clustering_header = Channel.value(file("$projectDir/assets/multiqc/deseq2_clustering_header.txt", checkIfExists: true))
+ch_allo_header              = file("$projectDir/assets/multiqc/allo_header.txt", checkIfExists: true)
 
 // Save AWS IGenomes file containing annotation version
 def anno_readme = params.genomes[ params.genome ]?.readme
@@ -166,7 +165,30 @@ workflow CHIPSEQ {
     //
     // SUBWORKFLOW: Alignment with Bowtie2 & BAM QC
     //
-    if (params.aligner == 'bowtie2') {
+    ch_allo_multiqc = Channel.empty()
+    if (params.aligner == 'bowtie2' && params.with_allo) {
+        //
+        // SUBWORKFLOW: Bowtie2 (-k N) -> samtools collate -> Allo --mixed -> sort/index/stats
+        // Everything downstream (merging, duplicate marking, filtering, peak calling ...) uses the Allo alignments
+        //
+        FASTQ_ALIGN_BOWTIE2_ALLO (
+            FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.reads,
+            ch_bowtie2_index,
+            params.save_unaligned,
+            ch_fasta
+                .map {
+                    [ [:], it ]
+                },
+            ch_allo_header
+        )
+        ch_genome_bam        = FASTQ_ALIGN_BOWTIE2_ALLO.out.bam
+        ch_genome_bam_index  = FASTQ_ALIGN_BOWTIE2_ALLO.out.bai
+        ch_samtools_stats    = FASTQ_ALIGN_BOWTIE2_ALLO.out.stats
+        ch_samtools_flagstat = FASTQ_ALIGN_BOWTIE2_ALLO.out.flagstat
+        ch_samtools_idxstats = FASTQ_ALIGN_BOWTIE2_ALLO.out.idxstats
+        ch_allo_multiqc      = FASTQ_ALIGN_BOWTIE2_ALLO.out.allo_multiqc
+        ch_versions = ch_versions.mix(FASTQ_ALIGN_BOWTIE2_ALLO.out.versions)
+    } else if (params.aligner == 'bowtie2') {
         FASTQ_ALIGN_BOWTIE2 (
             FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.reads,
             ch_bowtie2_index,
@@ -271,18 +293,6 @@ workflow CHIPSEQ {
             }
     )
     ch_versions = ch_versions.mix(BAM_MARKDUPLICATES_PICARD.out.versions)
-
-    //
-    // SUBWORKFLOW: Separate multi-mapped reads (instead of discarding them) and quantify
-    //              their coverage over repetitive genome elements
-    //
-    if (!params.skip_multimap_repeats && params.repeat_masker_bed) {
-        BAM_MULTIMAP_REPEATS (
-            BAM_MARKDUPLICATES_PICARD.out.bam.join(BAM_MARKDUPLICATES_PICARD.out.bai, by: [0]),
-            ch_repeat_masker_bed
-        )
-        ch_versions = ch_versions.mix(BAM_MULTIMAP_REPEATS.out.versions)
-    }
 
     //
     // SUBWORKFLOW: Filter BAM file with BamTools
@@ -517,6 +527,81 @@ workflow CHIPSEQ {
     }
 
     //
+    // SUBWORKFLOW: Motif discovery on per-sample and consensus peaks with XSTREME
+    //
+    if (params.run_xstreme) {
+        PEAKS_MOTIFS_XSTREME (
+            BAM_PEAKS_CALL_QC_ANNOTATE_MACS3_HOMER.out.peaks,
+            ch_macs3_consensus_bed_lib,
+            BAM_FILTER_BAMTOOLS.out.stats,
+            ch_fasta,
+            ch_fai,
+            params.xstreme_motif_db ? file(params.xstreme_motif_db, checkIfExists: true) : [],
+            params.xstreme_maxw_cap
+        )
+        ch_versions = ch_versions.mix(PEAKS_MOTIFS_XSTREME.out.versions)
+    }
+
+    //
+    // SUBWORKFLOW: Annotate peaks with RepeatMasker / CenSat features
+    //
+    ch_feature_covered_consensus = Channel.empty()
+    ch_feature_annotation_multiqc = Channel.empty()
+    if (params.annotate_features) {
+        PEAKS_ANNOTATE_REPEATMASKER_CENSAT (
+            BAM_PEAKS_CALL_QC_ANNOTATE_MACS3_HOMER.out.peaks,
+            ch_macs3_consensus_bed_lib,
+            ch_fasta,
+            ch_chrom_sizes,
+            params.feature_min_overlap
+        )
+        ch_feature_covered_consensus  = PEAKS_ANNOTATE_REPEATMASKER_CENSAT
+            .out
+            .covered
+            .filter { meta, feature, tsv -> meta.consensus }
+        ch_feature_annotation_multiqc = PEAKS_ANNOTATE_REPEATMASKER_CENSAT.out.multiqc
+        ch_versions = ch_versions.mix(PEAKS_ANNOTATE_REPEATMASKER_CENSAT.out.versions)
+    }
+
+    //
+    // MODULE: Differential binding between sample groups on consensus peaks + visualisation with
+    //         HOMER and RepeatMasker/CenSat annotations
+    //
+    ch_differential_multiqc = Channel.empty()
+    if (params.run_differential && !params.skip_consensus_peaks) {
+        // [ antibody, homer_txt ]
+        ch_consensus_homer = BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2
+            .out
+            .consensus_annotate_txt
+            .map { meta, txt -> [ meta.id, txt ] }
+
+        // [ antibody, [ [ feature_names ], [ feature_files ] ] ]
+        ch_consensus_features = ch_feature_covered_consensus
+            .map { meta, feature, tsv -> [ meta.antibody, feature.id, tsv ] }
+            .groupTuple()
+            .map { antibody, names, files -> [ antibody, [ names, files ] ] }
+
+        BED_CONSENSUS_QUANTIFY_QC_BEDTOOLS_FEATURECOUNTS_DESEQ2
+            .out
+            .featurecounts_txt
+            .map { meta, counts -> [ meta.id, meta, counts ] }
+            .join(ch_consensus_homer, remainder: true)
+            .join(ch_consensus_features, remainder: true)
+            .filter { it[1] != null }
+            .map {
+                antibody, meta, counts, homer, features ->
+                    [ meta, counts, homer ?: [], features ? features[0] : [], features ? features[1] : [] ]
+            }
+            .set { ch_differential_input }
+
+        PLOT_DIFFERENTIAL_PEAKS (
+            ch_differential_input
+        )
+        ch_differential_multiqc = PLOT_DIFFERENTIAL_PEAKS.out.multiqc
+        ch_versions = ch_versions.mix(PLOT_DIFFERENTIAL_PEAKS.out.versions.first())
+    }
+
+    //
     // MODULE: Create IGV session
     //
     if (!params.skip_igv) {
@@ -550,6 +635,9 @@ workflow CHIPSEQ {
         ch_workflow_summary      = Channel.value(paramsSummaryMultiqc(summary_params))
         ch_multiqc_files = ch_multiqc_files.mix(ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'))
         ch_multiqc_files = ch_multiqc_files.mix(ch_collated_versions)
+        ch_multiqc_files = ch_multiqc_files.mix(ch_allo_multiqc)
+        ch_multiqc_files = ch_multiqc_files.mix(ch_feature_annotation_multiqc)
+        ch_multiqc_files = ch_multiqc_files.mix(ch_differential_multiqc)
 
         MULTIQC (
             ch_multiqc_files.collect(),

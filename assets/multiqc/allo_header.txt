@@ -1,0 +1,34 @@
+# id: 'allo_allocation'
+# section_name: 'LIB: Allo multi-mapped read allocation'
+# description: "shows how many multi-mapped reads (or read pairs) were rescued by <a href='https://github.com/seqcode/allo' target='_blank'>Allo</a> (run with <code>--mixed</code>) after Bowtie2 alignment with <code>-k</code>. Counts are taken from the Allo log of each library."
+# plot_type: 'table'
+# pconfig:
+#     id: 'allo_allocation_table'
+#     title: 'Allo allocation summary'
+#     namespace: 'Allo'
+# headers:
+#     Unit:
+#         title: 'Unit'
+#         description: 'Reads (single-end) or read pairs (paired-end)'
+#     Uniquely mapped:
+#         title: 'Uniquely mapped'
+#         description: 'Uniquely mapped reads/pairs analysed by Allo'
+#         format: '{:,.0f}'
+#     Allocated multi-mapped:
+#         title: 'MMR allocated'
+#         description: 'Multi-mapped reads/pairs allocated to a single location by Allo'
+#         format: '{:,.0f}'
+#     % allocated:
+#         title: '% MMR'
+#         description: 'Allocated multi-mapped reads as a percentage of all reads written by Allo'
+#         max: 100
+#         min: 0
+#         suffix: '%'
+#     Filtered:
+#         title: 'Filtered'
+#         description: 'Reads removed by Allo (unmapped or containing N; use --keep-unmap via --allo_args to disable)'
+#         format: '{:,.0f}'
+#     Avg alignments per MMR:
+#         title: 'Avg locations'
+#         description: 'Average number of alignments per multi-mapped read (capped by Bowtie2 -k / Allo -max)'
+Sample	Unit	Uniquely mapped	Allocated multi-mapped	% allocated	Filtered	Avg alignments per MMR

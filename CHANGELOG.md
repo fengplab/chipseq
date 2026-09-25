@@ -3,6 +3,15 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - local modifications on top of 2.1.0
+
+### Added
+
+- Optional multi-mapped read allocation with [Allo](https://github.com/seqcode/allo) (`--with_allo`, Bowtie2 only). Bowtie2 runs with `-k 25` (`--allo_max_alignments`), raw alignments are grouped with `samtools collate` and passed to `allo --mixed` as SAM. Allocated reads are made primary and all downstream steps use the Allo alignments. Container `quay.io/biocontainers/allo:1.2.0--pyhdfd78af_0`; `--allo_use_local` uses a locally installed `allo` instead. Allo statistics are added to MultiQC.
+- Optional motif discovery with XSTREME (`--run_xstreme`) on per-sample and consensus peaks, using XSTREME defaults except `--maxw`, which is set to the shortest read length in the final filtered BAM file(s) (capped at 30 for STREME compatibility, `--xstreme_maxw_cap`).
+- Optional RepeatMasker / CenSat peak annotation (`--annotate_features`) from pre-generated BigBed files (`--repeatmasker_bigbed`, `--censat_bigbed`) or from source annotations / a RepeatMasker run, whose BigBeds are published for reuse. Reports overlaps with the percentage of both peak and feature covered, and the subset covering >= 80% of a feature (`--feature_min_overlap`). Per-sample plots and MultiQC sections.
+- Optional DESeq2 differential binding between sample groups on consensus peaks (`--run_differential`) with MA, volcano, heatmap and annotation plots (HOMER categories, distance to TSS, RepeatMasker / CenSat classes, Fisher enrichment tests) and a MultiQC summary.
+
 ## [[2.1.0](https://github.com/nf-core/chipseq/releases/tag/2.1.0)] - 2024-10-07
 
 ### Credits

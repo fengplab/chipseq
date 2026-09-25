@@ -74,6 +74,21 @@ Adapter-trimmed reads are mapped to the reference assembly using the aligner set
 
 ![MultiQC - SAMtools stats plot](images/mqc_samtools_stats_plot.png)
 
+#### Allo (`--with_allo`)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `bowtie2/library/allo/`
+  - `*.allo.log`: Allo log with the number of uniquely mapped, allocated and filtered reads.
+  - `allo_allocation_mqc.tsv`: per-library summary shown in MultiQC.
+  - `*.allo.sam`: Allo output (only with `--save_align_intermeds`).
+  - `bowtie2_raw/*.bam`, `*.bowtie2.log`: raw Bowtie2 `-k` alignments (only with `--save_align_intermeds`).
+
+</details>
+
+Multi-mapped reads are allocated to a single location by [Allo](https://github.com/seqcode/allo) (`--mixed` model). Allocated reads carry a `ZA` tag (or `ZZ` when every candidate location had zero uniquely mapped reads) whose value is the number of locations the read mapped to. The library-level BAM files and everything downstream are generated from the Allo output.
+
 #### Unmapped reads
 
 The `--save_unaligned` parameter enables to obtain FastQ files containing unmapped reads (only available for STAR and Bowtie2).
@@ -239,6 +254,36 @@ The [featureCounts](http://bioinf.wehi.edu.au/featureCounts/) tool is used to co
 
 ![MultiQC - featureCounts consensus peak read assignment plot](images/mqc_featureCounts_assignment_plot.png)
 
+### Motif discovery with XSTREME (`--run_xstreme`)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `<ALIGNER>/merged_library/macs3/<PEAK_TYPE>/xstreme/` (per sample) and `.../consensus/<ANTIBODY>/xstreme/` (consensus peaks)
+  - `<PREFIX>_xstreme/`: full XSTREME output directory (`xstreme.html`, `xstreme.txt`, `combined.meme`, STREME/MEME/SEA sub-directories) plus `pipeline_maxw.txt` with the `--maxw` value used.
+  - `<PREFIX>.xstreme.html`, `<PREFIX>.xstreme.combined.meme`: copies of the main report and discovered motifs.
+
+</details>
+
+### RepeatMasker / CenSat annotation (`--annotate_features`)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `genome/annotation/`
+  - `repeatmasker.bb`, `censat.bb`: BigBeds built by the pipeline; pass them back with `--repeatmasker_bigbed` / `--censat_bigbed` to avoid re-calculating them.
+  - `repeatmasker/*.rmsk.out`: RepeatMasker output (only with `--run_repeatmasker`).
+- `<ALIGNER>/merged_library/macs3/<PEAK_TYPE>/feature_annotation/<SAMPLE>/` and `.../consensus/<ANTIBODY>/feature_annotation/`, one set of files per feature set (`repeatmasker`, `censat`):
+  - `*.all_overlaps.tsv`: every peak/feature overlap with overlap length, `peak_pct_covered` (% of the peak), `feature_pct_covered` (% of the feature) and whether the feature coverage passes the threshold.
+  - `*.feature_covered.tsv`: overlaps in which the peak covers at least `--feature_min_overlap` (80%) of the feature.
+  - `*.peak_annotation.tsv`: one row per peak with the covered features and classes.
+  - `*.class_summary.tsv`: per class, number of covered features and of peaks covering them.
+- `<ALIGNER>/merged_library/macs3/<PEAK_TYPE>/qc/feature_annotation/`
+  - `<FEATURE_SET>.peak_feature_overlap.pdf`: per-sample bar charts and heatmap of peaks covering features, by class.
+  - `<FEATURE_SET>.class_summary.combined.tsv`, `*_mqc.tsv`: combined table and MultiQC bar graph.
+
+</details>
+
 ### Read counting and differential binding analysis
 
 <details markdown="1">
@@ -267,6 +312,22 @@ For larger experiments, it is recommended to use the `vst` transformation instea
 ![MultiQC - DESeq2 PCA plot](images/mqc_deseq2_pca_plot.png)
 
 ![MultiQC - DESeq2 sample similarity plot](images/mqc_deseq2_sample_similarity_plot.png)
+
+
+#### Differential binding (`--run_differential`)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `<ALIGNER>/merged_library/macs3/<PEAK_TYPE>/consensus/<ANTIBODY>/differential/`
+  - `*.<A>vs<B>.results.txt`: DESeq2 results for every consensus peak (log2 fold change of A relative to B, adjusted p-value, direction Up/Down/NS) joined with the HOMER annotation, covered RepeatMasker/CenSat features and normalised counts.
+  - `*.<A>vs<B>.significant.txt` / `.significant.bed`: differential peaks only.
+  - `*.<A>vs<B>.homer_enrichment.txt`, `*.<A>vs<B>.<FEATURE_SET>_enrichment.txt`: Fisher's exact tests of HOMER categories and RepeatMasker/CenSat classes in Up and Down peaks against all consensus peaks.
+  - `*.<A>vs<B>.plots.pdf`: MA plot, volcano plot, heatmap of the top differential peaks, HOMER category composition and enrichment, distance-to-TSS distribution, RepeatMasker/CenSat coverage, class composition and enrichment, and volcano plots highlighting peaks that cover features.
+  - `*.differential_summary.txt` / `.pdf`, `*_mqc.tsv`: number of Up/Down peaks per contrast (also shown in MultiQC).
+  - `*.normalised_counts.txt`, `*.dds.rds`: DESeq2 normalised counts and object.
+
+</details>
 
 ## Aggregate analysis
 

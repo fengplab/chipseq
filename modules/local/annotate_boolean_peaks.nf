@@ -11,7 +11,7 @@ process ANNOTATE_BOOLEAN_PEAKS {
     tuple val(meta), path(boolean_txt), path(homer_peaks)
 
     output:
-    path '*.boolean.annotatePeaks.txt', emit: annotate_peaks_txt
+    tuple val(meta), path('*.boolean.annotatePeaks.txt'), emit: annotate_peaks_txt
     path "versions.yml"               , emit: versions
 
     script:
