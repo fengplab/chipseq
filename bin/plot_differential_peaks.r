@@ -23,7 +23,7 @@ option_list <- list(
     make_option(c("-d", "--id_col"        ), type="integer"  , default=1       , help="Column containing the interval id."),
     make_option(c("-r", "--sample_suffix" ), type="character", default=''      , help="Suffix to strip from count column names."),
     make_option(c("-a", "--homer_file"    ), type="character", default=''      , help="Consensus *.boolean.annotatePeaks.txt (optional)."),
-    make_option(c("-e", "--feature_files" ), type="character", default=''      , help="Comma-separated *.feature_covered.tsv files (optional)."),
+    make_option(c("-e", "--feature_files" ), type="character", default=''      , help="Comma-separated *.overlap_filtered.tsv files (optional)."),
     make_option(c("-n", "--feature_names" ), type="character", default=''      , help="Comma-separated names matching --feature_files."),
     make_option(c("-q", "--fdr"           ), type="double"   , default=0.05    , help="Adjusted p-value threshold."),
     make_option(c("-l", "--lfc"           ), type="double"   , default=0       , help="Absolute log2 fold-change threshold for calling a peak differential."),
@@ -298,13 +298,13 @@ for (pr in pairs) {
         fl <- feature_long[[nm]]
         fl <- fl[fl$interval_id %in% res_df$interval_id, ]
         overlap_any <- res_df$interval_id %in% fl$interval_id
-        any_df <- data.frame(direction=res_df$direction, covered=ifelse(overlap_any, "covers >=1 feature", "none"))
+        any_df <- data.frame(direction=res_df$direction, covered=ifelse(overlap_any, "passes filter", "none"))
         any_tab <- as.data.frame(prop.table(table(any_df$direction, any_df$covered), 1))
         colnames(any_tab) <- c("direction", "covered", "prop")
         print(ggplot(any_tab, aes(x=direction, y=prop, fill=covered)) + geom_col() +
-            scale_fill_manual(values=c("covers >=1 feature"="darkorange", "none"="grey80")) +
+            scale_fill_manual(values=c("passes filter"="darkorange", "none"="grey80")) +
             scale_y_continuous(labels=function(x) paste0(100 * x, "%")) +
-            labs(title=paste0(nm, ": proportion of peaks covering >= threshold of a feature: ", contrast_name), x=NULL, y="Proportion of peaks", fill=NULL) +
+            labs(title=paste0(nm, ": proportion of peaks passing the overlap filter: ", contrast_name), x=NULL, y="Proportion of peaks", fill=NULL) +
             theme_bw())
 
         if (nrow(fl) > 0) {
@@ -319,7 +319,7 @@ for (pr in pairs) {
             print(ggplot(per_dir, aes(x=class, y=pct, fill=direction)) +
                 geom_col(position=position_dodge(width=0.85), width=0.8) + coord_flip() +
                 scale_fill_manual(values=dir_colours) +
-                labs(title=paste0(nm, " classes covered by peaks, by direction: ", contrast_name),
+                labs(title=paste0(nm, " classes overlapping peaks (overlap filter), by direction: ", contrast_name),
                      x=NULL, y="% of peaks in direction", fill=NULL) + theme_bw())
 
             members <- split(fl$interval_id, fl$class)
@@ -329,13 +329,13 @@ for (pr in pairs) {
                 print(plot_enrichment(e_f[e_f$class %in% tops, ], paste0(nm, " class enrichment in differential peaks: ", contrast_name)))
             }
 
-            vol$feature <- ifelse(vol$interval_id %in% fl$interval_id, paste0("covers ", nm, " feature"), "no feature")
+            vol$feature <- ifelse(vol$interval_id %in% fl$interval_id, paste0("overlaps ", nm, " feature"), "no feature")
             print(ggplot(vol, aes(x=log2FoldChange, y=mlog10)) +
                 geom_point(data=vol[vol$feature == "no feature", ], colour="grey80", size=0.6) +
                 geom_point(data=vol[vol$feature != "no feature", ], aes(colour=direction), size=0.9, alpha=0.8) +
                 geom_hline(yintercept=-log10(opt$fdr), linetype="dashed", size=0.3) +
                 scale_colour_manual(values=dir_colours) +
-                labs(title=paste0("Volcano plot highlighting peaks covering ", nm, " features: ", contrast_name),
+                labs(title=paste0("Volcano plot highlighting peaks overlapping ", nm, " features: ", contrast_name),
                      subtitle="grey = no covered feature", x="log2 fold change", y="-log10 adjusted p-value", colour=NULL) +
                 theme_bw())
         }

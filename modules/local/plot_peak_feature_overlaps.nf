@@ -12,7 +12,7 @@ process PLOT_PEAK_FEATURE_OVERLAPS {
 
     input:
     tuple val(feature), path(summaries)
-    val   min_overlap
+    val   criterion   // human-readable overlap filter description
 
     output:
     path "*.class_summary.combined.tsv", emit: tsv
@@ -29,7 +29,7 @@ process PLOT_PEAK_FEATURE_OVERLAPS {
     plot_peak_feature_overlaps.r \\
         --summary_files ${summaries.collect{ it.toString() }.sort().join(',')} \\
         --feature_set ${feature.id} \\
-        --min_overlap $min_overlap \\
+        --criterion '${criterion}' \\
         --outprefix ${feature.id} \\
         $args
 

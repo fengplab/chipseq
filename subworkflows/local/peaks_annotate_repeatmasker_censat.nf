@@ -18,13 +18,28 @@ include { BIGBED_TO_BED              } from '../../modules/local/bigbed_to_bed'
 include { PEAK_FEATURE_INTERSECT     } from '../../modules/local/peak_feature_intersect'
 include { PLOT_PEAK_FEATURE_OVERLAPS } from '../../modules/local/plot_peak_feature_overlaps'
 
+//
+// Human-readable description of the overlap filter (used in plot titles and MultiQC)
+//
+def overlapCriterion(overlap) {
+    def (f, p, mode) = overlap
+    def fs = "peak covers >= ${Math.round(100 * (f as double))}% of feature"
+    def ps = "feature covers >= ${Math.round(100 * (p as double))}% of peak"
+    switch (mode) {
+        case 'both':    return "${fs} AND ${ps}"
+        case 'feature': return fs
+        case 'peak':    return ps
+        default:        return "${fs} OR ${ps}"
+    }
+}
+
 workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
     take:
     ch_peaks           // channel: [ val(meta), peaks ]  per-sample MACS3 peaks
     ch_consensus_peaks // channel: [ val(meta), bed ]    consensus peaks (meta.id == antibody), may be empty
     ch_fasta           // channel: path(fasta)
     ch_chrom_sizes     // channel: path(chrom.sizes)
-    min_overlap        // float  : minimum fraction of a feature that must be covered by a peak
+    overlap            // list   : [ feature_min_fraction, peak_min_fraction, mode ] overlap filter (see PEAK_FEATURE_INTERSECT)
 
     main:
 
@@ -107,7 +122,7 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
             .map { meta, peaks -> [ meta + [ consensus: false ], peaks ] }
             .mix(ch_consensus_meta)
             .combine(BIGBED_TO_BED.out.bed),
-        min_overlap
+        overlap
     )
     ch_versions = ch_versions.mix(PEAK_FEATURE_INTERSECT.out.versions.first())
 
@@ -121,7 +136,7 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
             .filter { meta, feature, tsv -> !meta.consensus }
             .map { meta, feature, tsv -> [ feature, tsv ] }
             .groupTuple(),
-        min_overlap
+        overlapCriterion(overlap)
     )
     ch_versions = ch_versions.mix(PLOT_PEAK_FEATURE_OVERLAPS.out.versions.first())
 

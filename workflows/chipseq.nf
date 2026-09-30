@@ -553,7 +553,7 @@ workflow CHIPSEQ {
             ch_macs3_consensus_bed_lib,
             ch_fasta,
             ch_chrom_sizes,
-            params.feature_min_overlap
+            [ params.feature_min_overlap, params.peak_min_overlap, params.feature_overlap_mode ]
         )
         ch_feature_covered_consensus  = PEAKS_ANNOTATE_REPEATMASKER_CENSAT
             .out

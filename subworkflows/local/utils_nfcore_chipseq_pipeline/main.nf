@@ -191,8 +191,13 @@ def validateInputParameters() {
         error("'--run_differential' requires consensus peaks; do not combine it with '--skip_consensus_peaks'.")
     }
 
-    if (params.feature_min_overlap <= 0 || params.feature_min_overlap > 1) {
-        error("'--feature_min_overlap' must be a fraction in (0, 1], e.g. 0.8 for 80%.")
+    [ 'feature_min_overlap', 'peak_min_overlap' ].each { p ->
+        if (params[p] <= 0 || params[p] > 1) {
+            error("'--${p}' must be a fraction in (0, 1], e.g. 0.8 for 80%.")
+        }
+    }
+    if (!(params.feature_overlap_mode in [ 'either', 'both', 'feature', 'peak' ])) {
+        error("'--feature_overlap_mode' must be one of 'either', 'both', 'feature' or 'peak' (got '${params.feature_overlap_mode}').")
     }
 }
 

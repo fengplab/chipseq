@@ -498,7 +498,27 @@
                     "minimum": 0,
                     "maximum": 1,
                     "fa_icon": "fas fa-percentage",
-                    "description": "Minimum fraction of a feature that a peak must cover to be reported in the *.feature_covered.tsv tables."
+                    "description": "Minimum fraction of a RepeatMasker/CenSat feature that a peak must cover (see --feature_overlap_mode)."
+                },
+                "peak_min_overlap": {
+                    "type": "number",
+                    "default": 0.8,
+                    "minimum": 0,
+                    "maximum": 1,
+                    "fa_icon": "fas fa-percentage",
+                    "description": "Minimum fraction of a peak that a RepeatMasker/CenSat feature must cover (see --feature_overlap_mode)."
+                },
+                "feature_overlap_mode": {
+                    "type": "string",
+                    "default": "either",
+                    "enum": [
+                        "either",
+                        "both",
+                        "feature",
+                        "peak"
+                    ],
+                    "fa_icon": "fas fa-code-branch",
+                    "description": "How the two overlap thresholds are combined for the *.overlap_filtered.tsv tables: 'either' (peak covers >= feature_min_overlap of the feature OR feature covers >= peak_min_overlap of the peak), 'both' (AND), 'feature' or 'peak' (that test only)."
                 },
                 "feature_chrom_alias": {
                     "type": "string",

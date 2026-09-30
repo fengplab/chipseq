@@ -193,11 +193,19 @@ nextflow run nf-core/chipseq --annotate_features \
 
 Sources, in order of precedence: `--repeatmasker_bigbed` > `--repeatmasker_annotation` (RepeatMasker `.out`, UCSC `rmsk.txt[.gz]` or BED) > `--run_repeatmasker` (optionally `--repeatmasker_species`, `--repeatmasker_lib`); `--censat_bigbed` > `--censat_bed`. Remote URLs (e.g. UCSC hub BigBeds) can be passed directly. Chromosome names must match the genome FASTA; features on other sequences are dropped. For BigBeds not built by the pipeline, the feature class is read from an autoSql field named `repClass`/`class`/`type` if present, from RepeatMasker-style names (`AluY#SINE/Alu`), or derived from the name (CenSat: `hsat2_2(...)` -> `hsat2`).
 
-Peaks are reported as covering a feature when they overlap at least `--feature_min_overlap` (default `0.8`, i.e. 80%) of the feature's length.
+An overlap is kept in the `*.overlap_filtered.tsv` tables when it passes the overlap filter. By default the peak must cover at least 80% of the feature (`--feature_min_overlap 0.8`) **or** the feature must cover at least 80% of the peak (`--peak_min_overlap 0.8`). `--feature_overlap_mode` controls how the two tests are combined: `either` (OR, default), `both` (AND), `feature` or `peak` (only that test). The `*.all_overlaps.tsv` tables list every overlap with `peak_pct_covered`, `feature_pct_covered` and the result of each test, whatever the filter. These can be set on the command line or in a config file passed with `-c`:
+
+```groovy
+params {
+    feature_min_overlap  = 0.8
+    peak_min_overlap     = 0.8
+    feature_overlap_mode = 'either'
+}
+```
 
 **Chromosome names** of the RepeatMasker/CenSat features must match the genome FASTA. Exact matches are used first, then an optional alias table (`--feature_chrom_alias`, e.g. UCSC `hs1.chromAlias.txt` to map T2T GenBank/RefSeq accessions such as `CP068277.2` to `chr1`), then `chr` prefix differences (`1` <-> `chr1`) and `chrM` <-> `MT` are fixed automatically. Features on chromosomes that still cannot be matched are dropped, and the run stops with an error if none match. A per-chromosome report (`genome/annotation/<feature_set>.chrom_report.tsv`) shows how each name was matched.
 
-**Expectation for CenSat:** CenSat arrays (HOR, HSat, ...) are typically tens of kb to several Mb long, so a peak rarely covers 80% of one. Empty `*.censat.feature_covered.tsv` tables are therefore expected; use `*.censat.all_overlaps.tsv` (which reports `peak_pct_covered`) to see which peaks fall inside satellite arrays, or lower `--feature_min_overlap`.
+**Expectation for CenSat:** CenSat arrays (HOR, HSat, ...) are typically tens of kb to several Mb long, so a peak rarely covers 80% of one. With the default `either` mode, peaks lying inside a satellite array still pass because the array covers >= 80% of the peak; with `--feature_overlap_mode feature` the CenSat tables will usually be empty.
 
 ### Differential binding and visualisation
 

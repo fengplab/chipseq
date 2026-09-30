@@ -274,8 +274,8 @@ The [featureCounts](http://bioinf.wehi.edu.au/featureCounts/) tool is used to co
   - `repeatmasker.bb`, `censat.bb`: BigBeds built by the pipeline; pass them back with `--repeatmasker_bigbed` / `--censat_bigbed` to avoid re-calculating them.
   - `repeatmasker/*.rmsk.out`: RepeatMasker output (only with `--run_repeatmasker`).
 - `<ALIGNER>/merged_library/macs3/<PEAK_TYPE>/feature_annotation/<SAMPLE>/` and `.../consensus/<ANTIBODY>/feature_annotation/`, one set of files per feature set (`repeatmasker`, `censat`):
-  - `*.all_overlaps.tsv`: every peak/feature overlap with overlap length, `peak_pct_covered` (% of the peak), `feature_pct_covered` (% of the feature) and whether the feature coverage passes the threshold.
-  - `*.feature_covered.tsv`: overlaps in which the peak covers at least `--feature_min_overlap` (80%) of the feature.
+  - `*.all_overlaps.tsv`: every peak/feature overlap with overlap length, `peak_pct_covered` (% of the peak), `feature_pct_covered` (% of the feature), `feature_covered_pass`, `peak_covered_pass` and the combined `passes_filter`.
+  - `*.overlap_filtered.tsv`: overlaps passing the overlap filter; by default the peak covers >= 80% of the feature OR the feature covers >= 80% of the peak (`--feature_min_overlap`, `--peak_min_overlap`, `--feature_overlap_mode`).
   - `*.peak_annotation.tsv`: one row per peak with the covered features and classes.
   - `*.class_summary.tsv`: per class, number of covered features and of peaks covering them.
 - `<ALIGNER>/merged_library/macs3/<PEAK_TYPE>/qc/feature_annotation/`
