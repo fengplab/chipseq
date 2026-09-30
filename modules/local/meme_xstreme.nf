@@ -40,7 +40,6 @@ process MEME_XSTREME {
             --oc ${prefix}_xstreme \\
             --p $fasta \\
             --maxw $maxw \\
-            --parse-genomic-coord \\
             $db_args \\
             $args
 

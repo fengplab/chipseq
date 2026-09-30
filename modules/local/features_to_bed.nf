@@ -13,9 +13,11 @@ process FEATURES_TO_BED {
     input:
     tuple val(meta), path(annotation)
     path  sizes
+    path  alias   // optional chromosome alias table ([] if none)
 
     output:
-    tuple val(meta), path("*.prepared.bed"), emit: bed
+    tuple val(meta), path("*.prepared.bed")    , emit: bed
+    tuple val(meta), path("*.chrom_report.tsv"), emit: report
     path "versions.yml"           , emit: versions
 
     when:
@@ -31,6 +33,8 @@ process FEATURES_TO_BED {
         $sizes \\
         ${prefix}.prepared.bed \\
         --type ${meta.id} \\
+        --report ${prefix}.source.chrom_report.tsv \\
+        ${alias ? "--alias ${alias}" : ''} \\
         $args
 
     cat <<-END_VERSIONS > versions.yml

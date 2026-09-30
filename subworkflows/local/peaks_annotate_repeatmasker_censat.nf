@@ -33,6 +33,7 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
     ch_source     = Channel.empty() // [ [id:feature_set], annotation to convert ]
     ch_fasta_val  = ch_fasta.collect().map { it[0] }
     ch_sizes_val  = ch_chrom_sizes.collect().map { it[0] }
+    ch_alias      = params.feature_chrom_alias ? file(params.feature_chrom_alias, checkIfExists: true) : []
 
     //
     // RepeatMasker
@@ -68,7 +69,8 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
     //
     FEATURES_TO_BED (
         ch_source,
-        ch_sizes_val
+        ch_sizes_val,
+        ch_alias
     )
     ch_versions = ch_versions.mix(FEATURES_TO_BED.out.versions.first())
 
@@ -84,7 +86,9 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
     // BigBed -> normalised BED8 used for the intersections
     //
     BIGBED_TO_BED (
-        ch_bigbed
+        ch_bigbed,
+        ch_sizes_val,
+        ch_alias
     )
     ch_versions = ch_versions.mix(BIGBED_TO_BED.out.versions.first())
 
@@ -124,6 +128,7 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
     emit:
     bigbed          = ch_bigbed                                   // channel: [ val(meta), bigbed ]
     features_bed    = BIGBED_TO_BED.out.bed                       // channel: [ val(meta), bed ]
+    chrom_report    = BIGBED_TO_BED.out.report                    // channel: [ val(meta), tsv ]
     all             = PEAK_FEATURE_INTERSECT.out.all              // channel: [ val(meta), val(feature), tsv ]
     covered         = PEAK_FEATURE_INTERSECT.out.covered          // channel: [ val(meta), val(feature), tsv ]
     peak_annotation = PEAK_FEATURE_INTERSECT.out.peak_annotation  // channel: [ val(meta), val(feature), tsv ]

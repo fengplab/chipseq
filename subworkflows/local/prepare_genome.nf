@@ -17,6 +17,7 @@ include {
 include { UNTARFILES           } from '../../modules/nf-core/untarfiles/main'
 include { GFFREAD              } from '../../modules/nf-core/gffread/main'
 include { CUSTOM_GETCHROMSIZES } from '../../modules/nf-core/custom/getchromsizes/main'
+include { RENAME_CHROMS        } from '../../modules/local/rename_chroms'
 include { BWA_INDEX            } from '../../modules/nf-core/bwa/index/main'
 include { BOWTIE2_BUILD        } from '../../modules/nf-core/bowtie2/build/main'
 include { CHROMAP_INDEX        } from '../../modules/nf-core/chromap/index/main'
@@ -117,6 +118,36 @@ workflow PREPARE_GENOME {
     }
 
     //
+    // Optionally rename chromosomes (e.g. RefSeq 'NC_*' -> UCSC 'chr*') in the FASTA, GTF, gene BED and blacklist
+    // before any index, chromosome sizes or downstream file is generated, so that every output uses the new names
+    //
+    ch_rename_reports = Channel.empty()
+    if (params.chrom_alias) {
+        def unwrap = { it instanceof List ? it[-1] : it }
+        RENAME_CHROMS (
+            ch_fasta.map { [ [ id:'fasta' ], unwrap(it) ] }
+                .mix( ch_gtf.map { [ [ id:'gtf' ], unwrap(it) ] } )
+                .mix( ch_gene_bed.map { [ [ id:'gene_bed' ], unwrap(it) ] } )
+                .mix( ch_blacklist.map { [ [ id:'blacklist' ], unwrap(it) ] } ),
+            file(params.chrom_alias, checkIfExists: true),
+            params.chrom_alias_column
+        )
+        ch_versions       = ch_versions.mix(RENAME_CHROMS.out.versions.first())
+        ch_rename_reports = RENAME_CHROMS.out.report
+
+        def renamed  = RENAME_CHROMS.out.renamed.branch { meta, f ->
+            fasta:     meta.id == 'fasta'
+            gtf:       meta.id == 'gtf'
+            gene_bed:  meta.id == 'gene_bed'
+            blacklist: meta.id == 'blacklist'
+        }
+        ch_fasta     = renamed.fasta.map { it[1] }.collect().map { it[0] }
+        ch_gtf       = renamed.gtf.map { it[1] }.collect().map { it[0] }
+        ch_gene_bed  = renamed.gene_bed.map { it[1] }.collect().map { it[0] }
+        ch_blacklist = renamed.blacklist.map { it[1] }
+    }
+
+    //
     // Create chromosome sizes file
     //
     CUSTOM_GETCHROMSIZES ( ch_fasta.map { [ [:], it ] } )
@@ -209,6 +240,7 @@ workflow PREPARE_GENOME {
     }
 
     emit:
+    rename_reports   = ch_rename_reports             // channel: [ val(meta), tsv ]
     fasta         = ch_fasta                  //    path: genome.fasta
     fai           = ch_fai                    //    path: genome.fai
     gtf           = ch_gtf                    //    path: genome.gtf

@@ -183,6 +183,20 @@
                     "fa_icon": "fas fa-ban",
                     "hidden": true,
                     "help_text": "Do not load `igenomes.config` when running the pipeline. You may choose this option if you observe clashes between custom parameters and those supplied in `igenomes.config`."
+                },
+                "chrom_alias": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "fa_icon": "fas fa-exchange-alt",
+                    "description": "Chromosome alias table used to rename the chromosomes of the genome FASTA, GTF, gene BED and blacklist before indexing (e.g. UCSC hs1.chromAlias.txt to convert RefSeq 'NC_060925.1' to 'chr1'). All outputs then use the new names.",
+                    "help_text": "Every name on a line of the table is treated as an equivalent name; sequences are renamed to the name in '--chrom_alias_column'. Names not in the table are kept and reported in genome/chrom_rename/. Cannot be combined with a pre-built aligner index."
+                },
+                "chrom_alias_column": {
+                    "type": "string",
+                    "default": "ucsc",
+                    "fa_icon": "fas fa-columns",
+                    "description": "Column of '--chrom_alias' to rename to: a header column name (e.g. 'ucsc', 'refseq') or a 1-based column number."
                 }
             },
             "required": [
@@ -319,6 +333,19 @@
                     "fa_icon": "fas fa-sort-numeric-up",
                     "description": "Maximum number of alignments reported per read by Bowtie2 (-k)."
                 },
+                "allo_max_workers": {
+                    "type": "integer",
+                    "default": 4,
+                    "minimum": 0,
+                    "fa_icon": "fas fa-microchip",
+                    "description": "Maximum number of parallel Allo workers (-p). Each worker loads TensorFlow and a full copy of the read landscape, so memory scales with this value; it is halved automatically on each retry. 0 = use all task CPUs."
+                },
+                "allo_tf_fingerprint_workaround": {
+                    "type": "boolean",
+                    "default": true,
+                    "fa_icon": "fas fa-band-aid",
+                    "description": "Disable TensorFlow SavedModel fingerprinting inside the Allo task. Avoids a segmentation fault in CreateFingerprintDef (seen with pip TensorFlow in conda environments) while Allo converts its CNN to TF Lite; does not change results."
+                },
                 "allo_args": {
                     "type": "string",
                     "fa_icon": "fas fa-terminal",
@@ -332,12 +359,12 @@
                 "allo_use_local": {
                     "type": "boolean",
                     "fa_icon": "fas fa-laptop",
-                    "description": "Do not use a container/conda environment for Allo; use the 'allo' executable found on the host $PATH."
+                    "description": "Do not use a container/conda environment for Allo; use the 'allo' executable found on the host $PATH (pip install bio-allo keras)."
                 },
                 "allo_container": {
                     "type": "string",
                     "fa_icon": "fab fa-docker",
-                    "description": "Override the Allo container image (default: quay.io/biocontainers/allo:1.2.0--pyhdfd78af_0)."
+                    "description": "Allo container image (required with Docker/Singularity). Build it from containers/allo/ (Dockerfile or allo.def); the public biocontainer lacks keras and cannot import Allo."
                 }
             }
         },
@@ -472,6 +499,13 @@
                     "maximum": 1,
                     "fa_icon": "fas fa-percentage",
                     "description": "Minimum fraction of a feature that a peak must cover to be reported in the *.feature_covered.tsv tables."
+                },
+                "feature_chrom_alias": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "fa_icon": "fas fa-exchange-alt",
+                    "description": "Chromosome alias table used to match RepeatMasker/CenSat chromosome names to the genome FASTA (e.g. UCSC <assembly>.chromAlias.txt). Each line lists equivalent names; 'chr' prefix differences and chrM/MT are handled automatically."
                 },
                 "repeatmasker_bigbed": {
                     "type": "string",

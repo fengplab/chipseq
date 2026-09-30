@@ -36,6 +36,45 @@ def read_chrom_sizes(path):
     return sizes
 
 
+def build_chrom_matcher(sizes, alias_path=None):
+    """Map feature chromosome names onto genome names: exact, alias table, +/- 'chr' prefix, chrM <-> MT."""
+    alias = {}
+    if alias_path:
+        with open_any(alias_path) as fh:
+            for line in fh:
+                if line.startswith("#") or not line.strip():
+                    continue
+                names = line.split()
+                target = next((n for n in names if n in sizes), None)
+                if target:
+                    for n in names:
+                        alias[n] = target
+
+    cache = {}
+
+    def match(chrom):
+        if chrom in cache:
+            return cache[chrom]
+        if chrom in sizes:
+            res = (chrom, "exact")
+        elif chrom in alias:
+            res = (alias[chrom], "alias")
+        elif "chr" + chrom in sizes:
+            res = ("chr" + chrom, "add_chr")
+        elif chrom.startswith("chr") and chrom[3:] in sizes:
+            res = (chrom[3:], "remove_chr")
+        elif chrom in ("chrM", "M") and "MT" in sizes:
+            res = ("MT", "mito")
+        elif chrom == "MT" and "chrM" in sizes:
+            res = ("chrM", "mito")
+        else:
+            res = (None, "not_in_genome")
+        cache[chrom] = res
+        return res
+
+    return match, cache
+
+
 def censat_class(name):
     """'hor_1(S1C1/5/19H1L)' -> 'hor'; 'active_hor(S3C1H1L)' -> 'active_hor'; 'hsat2_2' -> 'hsat2'; 'ct_1_1(p_arm)' -> 'ct'."""
     base = re.sub(r"\(.*$", "", name)
@@ -145,9 +184,13 @@ def main(args=None):
     parser.add_argument("output", help="Output BED6+2 file")
     parser.add_argument("--format", choices=["auto", "rmsk_out", "ucsc_rmsk", "bed"], default="auto")
     parser.add_argument("--type", choices=["repeatmasker", "censat", "generic"], default="generic")
+    parser.add_argument("--alias", default=None, help="Chromosome alias table (e.g. UCSC chromAlias.txt)")
+    parser.add_argument("--report", default=None, help="Write a chromosome matching report here")
     a = parser.parse_args(args)
 
     sizes = read_chrom_sizes(a.chrom_sizes)
+    match, matched = build_chrom_matcher(sizes, a.alias)
+    per_chrom = {}
     fmt = detect_format(a.input) if a.format == "auto" else a.format
     sys.stderr.write("Input format: {}\n".format(fmt))
 
@@ -160,7 +203,10 @@ def main(args=None):
         else:
             it = parse_bed(fh, a.type)
         for chrom, start, end, name, score, strand, cls, fam in it:
-            if chrom not in sizes:
+            src = chrom
+            chrom, how = match(chrom)
+            per_chrom[src] = per_chrom.get(src, 0) + 1
+            if chrom is None:
                 skipped_chrom += 1
                 continue
             start, end = max(0, start), min(end, sizes[chrom])
@@ -175,13 +221,26 @@ def main(args=None):
         for r in records:
             out.write("\t".join(map(str, r)) + "\n")
 
+    if a.report:
+        with open(a.report, "w") as rep:
+            rep.write("feature_chrom\tgenome_chrom\tmatch\tn_features\n")
+            for src, n in sorted(per_chrom.items()):
+                tgt, how = matched[src]
+                rep.write("{}\t{}\t{}\t{}\n".format(src, tgt or "NA", how, n))
+
     sys.stderr.write(
         "Wrote {} features; skipped {} on chromosomes absent from the genome and {} empty after clipping\n".format(
             len(records), skipped_chrom, skipped_len
         )
     )
     if not records:
-        sys.exit("ERROR: no features left after matching to the genome chromosome names. Check chromosome naming (e.g. 'chr1' vs '1').")
+        sys.exit(
+            "ERROR: no features left after matching to the genome chromosome names.\n"
+            "  feature chromosomes, e.g.: {}\n  genome chromosomes,  e.g.: {}\n"
+            "  Provide a chromosome alias table with --feature_chrom_alias (e.g. UCSC <assembly>.chromAlias.txt).".format(
+                " ".join(sorted(per_chrom)[:5]), " ".join(sorted(sizes)[:5])
+            )
+        )
 
 
 if __name__ == "__main__":

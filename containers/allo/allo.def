@@ -1,0 +1,14 @@
+# Singularity/Apptainer equivalent of the Dockerfile in this directory.
+# Build:  singularity build allo-1.2.0-keras.sif containers/allo/allo.def   (or: apptainer build ...)
+# Use:    nextflow run ... --with_allo --allo_container /path/to/allo-1.2.0-keras.sif
+Bootstrap: docker
+From: python:3.12-slim
+
+%post
+    apt-get update && apt-get install -y --no-install-recommends procps && rm -rf /var/lib/apt/lists/*
+    pip install --no-cache-dir "bio-allo==1.2.0" "tensorflow==2.21.0" "keras==3.15.1"
+    allo --version
+    python -c "import tensorflow.keras, Allo; print('Allo import OK')"
+
+%environment
+    export TF_CPP_MIN_LOG_LEVEL=2

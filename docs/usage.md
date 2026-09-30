@@ -128,6 +128,17 @@ wget -L https://www.encodeproject.org/files/ENCFF356LFX/@@download/ENCFF356LFX.b
 
 > **NB:** A detailed description of the different versions of the files can be found [here](https://github.com/Boyle-Lab/Blacklist/blob/master/README.md). Also, to to see which blacklist bed files are assigned by default to the respective reference genome check the [igenomes.config](https://github.com/nf-core/chipseq/blob/master/conf/igenomes.config).
 
+### Renaming chromosomes (`--chrom_alias`)
+
+If the genome FASTA uses one naming convention (e.g. RefSeq `NC_060925.1`) but you want every output, and matching with external tracks such as UCSC RepeatMasker/CenSat BigBeds, to use another (e.g. UCSC `chr1`), provide a chromosome alias table:
+
+```bash
+nextflow run nf-core/chipseq --fasta GCF_009914755.1_T2T-CHM13v2.0_genomic.fna.gz --gtf genes.gtf.gz \
+    --chrom_alias hs1.chromAlias.txt ...
+```
+
+The FASTA, GTF (also when converted from `--gff`), gene BED and blacklist are renamed before chromosome sizes and aligner indices are built, so BAM/bigWig/peak files, IGV sessions and all annotations use the new names. Every name on a line of the table is treated as equivalent, and sequences are renamed to the name in `--chrom_alias_column` (default `ucsc`, the first column of UCSC `<assembly>.chromAlias.txt` files, e.g. `https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/hs1.chromAlias.txt`; a 1-based column number also works). Sequences missing from the table keep their names; per-file reports are written to `genome/chrom_rename/`, and the renamed reference files to `genome/` with `--save_reference`. A pre-built aligner index cannot be combined with `--chrom_alias` because it contains the original names.
+
 ## Optional analyses added to this version
 
 All four additions are off by default.
@@ -140,8 +151,21 @@ nextflow run nf-core/chipseq --aligner bowtie2 --with_allo ...
 
 Bowtie2 is run with `-k 25` (`--allo_max_alignments`; paired-end data also get `--no-mixed --no-discordant`), the raw alignments are grouped by read name with `samtools collate` and written as SAM, and [Allo](https://github.com/seqcode/allo) is run on them with `--mixed`. Allo keeps the SAM record of the location it chooses unchanged, so an allocated read that Bowtie2 reported as a secondary alignment keeps FLAG 0x100 and would be dropped by Picard, MACS3 and featureCounts; the pipeline therefore clears 0x100 on reads carrying Allo's `ZA`/`ZZ` tags. Every downstream step (merging, duplicate marking, filtering, peak calling, ...) then uses the Allo alignments. Because allocated reads keep Bowtie2's low MAPQ, the BAMTools `-q 1` filter is disabled when `--with_allo` is set.
 
-- Container: `quay.io/biocontainers/allo:1.2.0--pyhdfd78af_0` (conda: `bioconda::allo=1.2.0`). Override with `--allo_container`.
-- `--allo_use_local`: no container or conda environment is used for the Allo task; the `allo` executable on the host `$PATH` is run instead (install with `pip install bio-allo`). The task fails with a clear message if `allo` is not found.
+- **Container / environment.** The public biocontainer (`allo:1.2.0--pyhdfd78af_0`) cannot be used: it lacks the `keras` package that TensorFlow >= 2.16 needs, and Allo fails with `ModuleNotFoundError: No module named 'tensorflow.keras'`. Recipes for a working environment (Allo 1.2.0, TensorFlow 2.21.0, Keras 3.15.1) are shipped in `containers/allo/`:
+
+  ```bash
+  # Docker / Podman
+  docker build -t allo:1.2.0-keras containers/allo
+  nextflow run ... -profile docker --with_allo --allo_container allo:1.2.0-keras
+
+  # Singularity / Apptainer
+  singularity build allo-1.2.0-keras.sif containers/allo/allo.def
+  nextflow run ... -profile singularity --with_allo --allo_container $PWD/allo-1.2.0-keras.sif
+  ```
+
+  With `-profile conda`/`mamba`, `containers/allo/environment.yml` (which adds `keras`) is used automatically. With a container engine and neither `--allo_container` nor `--allo_use_local`, the pipeline stops at start-up with these instructions.
+- `--allo_use_local`: no container or conda environment is used for the Allo task; the `allo` executable on the host `$PATH` is run instead (`pip install bio-allo keras`). The task fails with a clear message if `allo` is not found or `keras` is missing.
+- `--allo_max_workers` (default `4`): number of parallel Allo workers (`-p`). Every worker loads TensorFlow and the CNN and gets its own copy of the genome-wide map of uniquely mapped reads, so memory grows roughly linearly with this value (about 0.5 GB per worker before any read data, several GB per worker on deep human data). If a worker crashes (`TerminatedWorkerError`, SIGSEGV or SIGKILL), the task exits with 139 and is retried up to twice with half as many workers and more memory. Set `0` to use all task CPUs.
 - `--allo_args`: extra Allo arguments, e.g. `'--remove-zeros'`, `'-max 10'` or `'--keep-unmap'`.
 - `--allo_random_control`: also pass `--random` for control samples, as suggested by the Allo authors.
 
@@ -170,6 +194,10 @@ nextflow run nf-core/chipseq --annotate_features \
 Sources, in order of precedence: `--repeatmasker_bigbed` > `--repeatmasker_annotation` (RepeatMasker `.out`, UCSC `rmsk.txt[.gz]` or BED) > `--run_repeatmasker` (optionally `--repeatmasker_species`, `--repeatmasker_lib`); `--censat_bigbed` > `--censat_bed`. Remote URLs (e.g. UCSC hub BigBeds) can be passed directly. Chromosome names must match the genome FASTA; features on other sequences are dropped. For BigBeds not built by the pipeline, the feature class is read from an autoSql field named `repClass`/`class`/`type` if present, from RepeatMasker-style names (`AluY#SINE/Alu`), or derived from the name (CenSat: `hsat2_2(...)` -> `hsat2`).
 
 Peaks are reported as covering a feature when they overlap at least `--feature_min_overlap` (default `0.8`, i.e. 80%) of the feature's length.
+
+**Chromosome names** of the RepeatMasker/CenSat features must match the genome FASTA. Exact matches are used first, then an optional alias table (`--feature_chrom_alias`, e.g. UCSC `hs1.chromAlias.txt` to map T2T GenBank/RefSeq accessions such as `CP068277.2` to `chr1`), then `chr` prefix differences (`1` <-> `chr1`) and `chrM` <-> `MT` are fixed automatically. Features on chromosomes that still cannot be matched are dropped, and the run stops with an error if none match. A per-chromosome report (`genome/annotation/<feature_set>.chrom_report.tsv`) shows how each name was matched.
+
+**Expectation for CenSat:** CenSat arrays (HOR, HSat, ...) are typically tens of kb to several Mb long, so a peak rarely covers 80% of one. Empty `*.censat.feature_covered.tsv` tables are therefore expected; use `*.censat.all_overlaps.tsv` (which reports `peak_pct_covered`) to see which peaks fall inside satellite arrays, or lower `--feature_min_overlap`.
 
 ### Differential binding and visualisation
 

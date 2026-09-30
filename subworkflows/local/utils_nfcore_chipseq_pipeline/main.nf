@@ -148,8 +148,31 @@ def validateInputParameters() {
         error ("Both '--read_length' and '--macs_gsize' not specified! Please specify either to infer MACS3 genome size for peak calling.")
     }
 
+    if (params.chrom_alias) {
+        def prebuilt = [ 'bwa_index', 'bowtie2_index', 'chromap_index', 'star_index' ].findAll { params[it] && it.startsWith(params.aligner) }
+        if (prebuilt) {
+            error("'--chrom_alias' renames the chromosomes of the genome FASTA, but a pre-built index was given (--${prebuilt.join(', --')}) that still contains the original names. Remove it so the index is rebuilt from the renamed FASTA (when using '--genome', also set e.g. '--${prebuilt[0]} false').")
+        }
+    }
+
     if (params.with_allo && params.aligner != 'bowtie2') {
         error("'--with_allo' is only supported with '--aligner bowtie2' (Allo needs Bowtie2 multi-mapped read output).")
+    }
+
+    if (params.with_allo && !params.allo_use_local && !params.allo_container && workflow.containerEngine) {
+        error("""\
+            ==============================================================================================
+             '--with_allo' with a container engine (${workflow.containerEngine}) needs '--allo_container'.
+             The public biocontainer (allo:1.2.0--pyhdfd78af_0) is broken: it lacks the 'keras' package
+             that TensorFlow >= 2.16 requires ("No module named 'tensorflow.keras'").
+             Build a working image from the recipes shipped with the pipeline, e.g.
+               docker build -t allo:1.2.0-keras ${projectDir}/containers/allo
+                 -> --allo_container allo:1.2.0-keras
+               singularity build allo-1.2.0-keras.sif ${projectDir}/containers/allo/allo.def
+                 -> --allo_container /path/to/allo-1.2.0-keras.sif
+             or install Allo locally (pip install bio-allo keras) and use '--allo_use_local'.
+            ==============================================================================================
+            """.stripIndent())
     }
 
     if (params.with_allo && params.keep_multi_map == false) {

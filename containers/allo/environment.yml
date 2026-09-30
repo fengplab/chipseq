@@ -1,0 +1,12 @@
+# Conda environment for Allo (used by `-profile conda/mamba`, and usable for --allo_use_local).
+# The bioconda recipe for allo does not depend on keras, which TensorFlow >= 2.16 needs.
+#   conda env create -f containers/allo/environment.yml && conda activate allo
+name: allo
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python=3.12
+  - bioconda::allo=1.2.0
+  - conda-forge::keras=3
+  - conda-forge::procps-ng
