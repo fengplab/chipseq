@@ -40,11 +40,24 @@ process BIGBED_TO_BED {
                 h = tolower(\$i)
                 if (!cc && (h == "repclass" || h == "class" || h == "type" || h == "classname")) cc = i
                 if (!fc && (h == "repfamily" || h == "family")) fc = i
+                if (h == "thickstart") ts = i
+                if (h == "thickend") te = i
+                if (h == "blocksizes") bs = i
+                if (h == "description") ds = i
             }
+            # UCSC bigRmsk (bigRmskBed): chromStart/chromEnd are the *visualisation* span, which can include
+            # unaligned parts of the repeat consensus; thickStart/thickEnd are the aligned genomic span
+            rmsk = (ts && te && bs && ds) ? 1 : 0
             next
         }
         /^#/ { next }
         {
+            # bigRmsk without a header line (older bigBedToBed): 14 fields and a 'name#class/family' name
+            if (NR == 1 && !ts && NF == 14 && \$4 ~ /#/) { rmsk = 1; ts = 7; te = 8 }
+            start = \$2; end = \$3
+            if (rmsk && \$te ~ /^[0-9]+\$/ && \$ts ~ /^[0-9]+\$/ && \$te + 0 > \$ts + 0 && \$ts + 0 >= \$2 + 0 && \$te + 0 <= \$3 + 0) {
+                start = \$ts; end = \$te; n_thick++
+            }
             name   = (NF >= 4 && \$4 != "") ? \$4 : \$1 ":" \$2 "-" \$3
             score  = (NF >= 5 && \$5 ~ /^[0-9.]+\$/) ? int(\$5) : 0
             strand = (NF >= 6 && (\$6 == "+" || \$6 == "-")) ? \$6 : "."
@@ -62,8 +75,9 @@ process BIGBED_TO_BED {
             if (cls == "") cls = "NA"
             if (fam == "") fam = cls
             gsub(/ /, "_", cls); gsub(/ /, "_", fam)
-            print \$1, \$2, \$3, name, score, strand, cls, fam
-        }' raw.bed \\
+            print \$1, start, end, name, score, strand, cls, fam
+        }
+        END { if (rmsk) printf "bigRmsk format detected: %d features use the aligned span (thickStart-thickEnd)\\n", n_thick > "/dev/stderr" }' raw.bed \\
         > normalised.bed
 
     # Harmonise chromosome names with the genome: exact match, then an optional alias table (any name on a line
