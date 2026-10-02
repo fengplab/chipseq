@@ -35,6 +35,7 @@ process FEATURES_TO_BED {
         --type ${meta.id} \\
         --report ${prefix}.source.chrom_report.tsv \\
         ${alias ? "--alias ${alias}" : ''} \\
+        ${params.chrom_names_strict ? '' : '--allow_none'} \\
         $args
 
     cat <<-END_VERSIONS > versions.yml

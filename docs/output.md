@@ -82,7 +82,7 @@ Adapter-trimmed reads are mapped to the reference assembly using the aligner set
 - `bowtie2/library/allo/`
   - `*.allo.log`: Allo log with the number of uniquely mapped, allocated and filtered reads.
   - `allo_allocation_mqc.tsv`: per-library summary shown in MultiQC.
-  - `*.allo.sam`: Allo output (only with `--save_align_intermeds`).
+  - `*.allo.bam`: Allo output, compressed (only with `--save_align_intermeds`).
   - `bowtie2_raw/*.bam`, `*.bowtie2.log`: raw Bowtie2 `-k` alignments (only with `--save_align_intermeds`).
 
 </details>

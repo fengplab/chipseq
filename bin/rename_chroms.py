@@ -126,7 +126,12 @@ def main(args=None):
         len(renamed), len(kept) - len(unaliased), len(unaliased)))
     if unaliased:
         sys.stderr.write("  not in alias table, e.g.: {}\n".format(" ".join(unaliased[:5])))
-    if seen and not renamed and not (set(seen) & set(mapping)) and not a.allow_none:
+    if seen and not renamed and not (set(seen) & set(mapping)):
+        if a.allow_none:
+            sys.stderr.write(
+                "WARNING: none of the {} sequence names ({}) are in the alias table; original names were kept. "
+                "Check that the alias table belongs to this assembly.\n".format(len(seen), " ".join(sorted(seen)[:5])))
+            return 0
         sys.exit(
             "ERROR: none of the {} sequence names ({}) are in the alias table. Check that the alias table belongs "
             "to this assembly.".format(len(seen), " ".join(sorted(seen)[:5]))

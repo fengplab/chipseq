@@ -186,6 +186,7 @@ def main(args=None):
     parser.add_argument("--type", choices=["repeatmasker", "censat", "generic"], default="generic")
     parser.add_argument("--alias", default=None, help="Chromosome alias table (e.g. UCSC chromAlias.txt)")
     parser.add_argument("--report", default=None, help="Write a chromosome matching report here")
+    parser.add_argument("--allow_none", action="store_true", help="Write an empty file instead of failing when no feature matches the genome")
     a = parser.parse_args(args)
 
     sizes = read_chrom_sizes(a.chrom_sizes)
@@ -233,6 +234,11 @@ def main(args=None):
             len(records), skipped_chrom, skipped_len
         )
     )
+    if not records and a.allow_none:
+        sys.stderr.write(
+            "WARNING: no features matched the genome chromosome names (feature chromosomes, e.g.: {}; genome: {}). "
+            "This feature set will be skipped.\n".format(" ".join(sorted(per_chrom)[:5]), " ".join(sorted(sizes)[:5])))
+        return 0
     if not records:
         sys.exit(
             "ERROR: no features left after matching to the genome chromosome names.\n"

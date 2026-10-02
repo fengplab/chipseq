@@ -83,7 +83,7 @@ process BIGBED_TO_BED {
     # Harmonise chromosome names with the genome: exact match, then an optional alias table (any name on a line
     # maps to the name on that line that exists in the genome, e.g. UCSC chromAlias.txt), then adding/removing a
     # 'chr' prefix (plus chrM <-> MT). Features on chromosomes still absent from the genome are dropped and reported.
-    awk -v alias_file="${alias}" -v report=${prefix}.chrom_report.tsv 'BEGIN { FS = OFS = "\\t" }
+    awk -v alias_file="${alias}" -v report=${prefix}.chrom_report.tsv -v strict=${params.chrom_names_strict ? 1 : 0} 'BEGIN { FS = OFS = "\\t" }
         FILENAME == ARGV[1] { g[\$1] = 1; ng++; next }
         FILENAME == alias_file {
             if (\$0 ~ /^#/) next
@@ -111,11 +111,12 @@ process BIGBED_TO_BED {
             for (c in dropped) print c, "NA", "not_in_genome", dropped[c] >> report
             printf "Chromosome matching: %d features kept, %d dropped (not in genome)\\n", nk, nd > "/dev/stderr"
             if (nk == 0) {
-                printf "ERROR: none of the feature chromosome names match the genome FASTA.\\n" > "/dev/stderr"
+                printf "%s: none of the feature chromosome names match the genome FASTA.\\n", (strict ? "ERROR" : "WARNING") > "/dev/stderr"
                 k = 0; printf "  feature chromosomes, e.g.:" > "/dev/stderr"; for (c in dropped) { if (k++ < 5) printf " %s", c > "/dev/stderr" }
                 k = 0; printf "\\n  genome chromosomes,  e.g.:" > "/dev/stderr"; for (c in g) { if (k++ < 5) printf " %s", c > "/dev/stderr" }
                 printf "\\n  Provide a chromosome alias table with --feature_chrom_alias (e.g. UCSC <assembly>.chromAlias.txt).\\n" > "/dev/stderr"
-                exit 1
+                if (strict) exit 1
+                printf "  This feature set will be skipped (set --chrom_names_strict true to stop the run instead).\\n" > "/dev/stderr"
             }
         }' $sizes ${alias ?: '/dev/null'} normalised.bed \\
         | LC_ALL=C sort -k1,1 -k2,2n > ${prefix}.features.bed

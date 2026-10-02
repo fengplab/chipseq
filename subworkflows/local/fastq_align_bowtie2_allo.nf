@@ -2,7 +2,7 @@
 // Alignment with Bowtie2 reporting multi-mapped reads (-k N), multi-mapped read allocation with Allo,
 // then coordinate sorting, indexing and samtools stats on the Allo output.
 //
-// raw reads -> BOWTIE2_ALIGN (-k N, unsorted) -> SAMTOOLS_COLLATE (SAM, grouped by read name)
+// raw reads -> BOWTIE2_ALIGN (-k N, unsorted) -> SAMTOOLS_COLLATE (BAM, grouped by read name)
 //           -> ALLO (--mixed) -> ALLO_SAM_TO_BAM (clear 0x100 on allocated reads) -> BAM_SORT_STATS_SAMTOOLS
 //
 
@@ -40,13 +40,13 @@ workflow FASTQ_ALIGN_BOWTIE2_ALLO {
     //
     // Allocate multi-mapped reads with Allo
     //
-    ALLO ( SAMTOOLS_COLLATE.out.sam )
+    ALLO ( SAMTOOLS_COLLATE.out.bam )
     ch_versions = ch_versions.mix(ALLO.out.versions.first())
 
     //
     // Make allocated reads primary and convert to BAM
     //
-    ALLO_SAM_TO_BAM ( ALLO.out.sam )
+    ALLO_SAM_TO_BAM ( ALLO.out.bam )
     ch_versions = ch_versions.mix(ALLO_SAM_TO_BAM.out.versions.first())
 
     //
@@ -69,7 +69,7 @@ workflow FASTQ_ALIGN_BOWTIE2_ALLO {
     bam_orig         = BOWTIE2_ALIGN.out.bam                 // channel: [ val(meta), bam ]
     log_out          = BOWTIE2_ALIGN.out.log                 // channel: [ val(meta), log ]
     fastq            = BOWTIE2_ALIGN.out.fastq               // channel: [ val(meta), fastq ]
-    allo_sam         = ALLO.out.sam                          // channel: [ val(meta), sam ]
+    allo_bam         = ALLO.out.bam                          // channel: [ val(meta), bam ]
     allo_log         = ALLO.out.log                          // channel: [ val(meta), log ]
     allo_multiqc     = ch_allo_multiqc                       // channel: path(allo_allocation_mqc.tsv)
 

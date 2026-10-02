@@ -197,6 +197,12 @@
                     "default": "ucsc",
                     "fa_icon": "fas fa-columns",
                     "description": "Column of '--chrom_alias' to rename to: a header column name (e.g. 'ucsc', 'refseq') or a 1-based column number."
+                },
+                "chrom_names_strict": {
+                    "type": "boolean",
+                    "fa_icon": "fas fa-exclamation-triangle",
+                    "description": "Stop the run when chromosome names cannot be matched (genome renaming with --chrom_alias, or RepeatMasker/CenSat feature sets). By default the original names are kept / unmatched feature sets are skipped, with a warning.",
+                    "help_text": "Two different sequence names that would be renamed to the same name always stop the run, because that would corrupt the genome."
                 }
             },
             "required": [

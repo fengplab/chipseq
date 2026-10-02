@@ -16,7 +16,7 @@ process ALLO_SAM_TO_BAM {
         'biocontainers/samtools:1.20--h50ea8bc_0' }"
 
     input:
-    tuple val(meta), path(sam)
+    tuple val(meta), path(allo_bam)
 
     output:
     tuple val(meta), path("*.bam"), emit: bam
@@ -28,13 +28,15 @@ process ALLO_SAM_TO_BAM {
     script:
     def args   = task.ext.args   ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
+    if ("${allo_bam}" == "${prefix}.bam") error "Input and output names are the same, use \"task.ext.prefix\" to disambiguate!"
     """
-    awk 'BEGIN { FS = OFS = "\\t" }
+    samtools view -h $allo_bam \\
+        | awk 'BEGIN { FS = OFS = "\\t" }
         /^@/ { print; next }
         {
             if (\$0 ~ /\\tZ[AZ]:Z:[0-9]+/ && int(\$2 / 256) % 2 == 1) { \$2 = \$2 - 256 }
             print
-        }' $sam \\
+        }' \\
         | samtools view $args -@ $task.cpus -b -o ${prefix}.bam -
 
     cat <<-END_VERSIONS > versions.yml

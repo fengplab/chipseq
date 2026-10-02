@@ -139,6 +139,8 @@ nextflow run nf-core/chipseq --fasta GCF_009914755.1_T2T-CHM13v2.0_genomic.fna.g
 
 The FASTA, GTF (also when converted from `--gff`), gene BED and blacklist are renamed before chromosome sizes and aligner indices are built, so BAM/bigWig/peak files, IGV sessions and all annotations use the new names. Every name on a line of the table is treated as equivalent, and sequences are renamed to the name in `--chrom_alias_column` (default `ucsc`, the first column of UCSC `<assembly>.chromAlias.txt` files, e.g. `https://hgdownload.soe.ucsc.edu/goldenPath/hs1/bigZips/hs1.chromAlias.txt`; a 1-based column number also works). Sequences missing from the table keep their names; per-file reports are written to `genome/chrom_rename/`, and the renamed reference files to `genome/renamed/` with `--save_reference`. A pre-built aligner index cannot be combined with `--chrom_alias` because it contains the original names.
 
+**Unmatched chromosome names.** By default (`--chrom_names_strict false`) a mismatch does not stop the run: if no FASTA sequence is found in `--chrom_alias`, the original names are kept; if a RepeatMasker/CenSat feature set has no chromosome in common with the genome (e.g. human tracks on a mouse genome), that feature set is skipped. Both cases are reported as warnings in the Nextflow log and in the `genome/chrom_rename/` and `genome/annotation/*.chrom_report.tsv` reports. Set `--chrom_names_strict true` to stop the run instead. Sequence names that would collapse onto the same new name always stop the run.
+
 ## Optional analyses added to this version
 
 All four additions are off by default.
@@ -169,7 +171,7 @@ Bowtie2 is run with `-k 25` (`--allo_max_alignments`; paired-end data also get `
 - `--allo_args`: extra Allo arguments, e.g. `'--remove-zeros'`, `'-max 10'` or `'--keep-unmap'`.
 - `--allo_random_control`: also pass `--random` for control samples, as suggested by the Allo authors.
 
-Note that Bowtie2 with `-k` is considerably slower, that Allo removes unmapped reads by default (so library-level mapping rates in MultiQC appear close to 100%), and that an "LIB: Allo multi-mapped read allocation" table is added to MultiQC.
+To save space, the read-name-grouped Bowtie2 alignments are kept as compressed BAM (Allo converts its input to SAM internally, in a temporary folder that it deletes, so the data Allo processes are unchanged) and Allo's SAM output is compressed to BAM within the same task; no uncompressed SAM files remain in the work directory. Note that Bowtie2 with `-k` is considerably slower, that Allo removes unmapped reads by default (so library-level mapping rates in MultiQC appear close to 100%), and that an "LIB: Allo multi-mapped read allocation" table is added to MultiQC.
 
 ### Motif discovery with XSTREME
 

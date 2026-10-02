@@ -89,8 +89,20 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
     )
     ch_versions = ch_versions.mix(FEATURES_TO_BED.out.versions.first())
 
+    // Feature sets with no chromosome matching the genome are empty in lenient mode: skip them
+    def usable = { label, ch ->
+        ch.branch { meta, f ->
+            ok:    f.size() > 0
+            empty: true
+        }
+    }
+    def prepared = usable('prepared', FEATURES_TO_BED.out.bed)
+    prepared.empty.subscribe { meta, f ->
+        log.warn "[Feature annotation] '${meta.id}': no features on chromosomes of this genome (see ${meta.id}.source.chrom_report.tsv); skipping this feature set."
+    }
+
     UCSC_BEDTOBIGBED (
-        FEATURES_TO_BED.out.bed,
+        prepared.ok,
         ch_sizes_val,
         file("$projectDir/assets/feature_bed6plus2.as", checkIfExists: true)
     )
@@ -117,11 +129,16 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
         }
         .set { ch_consensus_meta }
 
+    def normalised = usable('normalised', BIGBED_TO_BED.out.bed)
+    normalised.empty.subscribe { meta, f ->
+        log.warn "[Feature annotation] '${meta.id}': none of the BigBed chromosome names match this genome (see genome/annotation/${meta.id}.chrom_report.tsv); skipping this feature set."
+    }
+
     PEAK_FEATURE_INTERSECT (
         ch_peaks
             .map { meta, peaks -> [ meta + [ consensus: false ], peaks ] }
             .mix(ch_consensus_meta)
-            .combine(BIGBED_TO_BED.out.bed),
+            .combine(normalised.ok),
         overlap
     )
     ch_versions = ch_versions.mix(PEAK_FEATURE_INTERSECT.out.versions.first())
@@ -142,7 +159,7 @@ workflow PEAKS_ANNOTATE_REPEATMASKER_CENSAT {
 
     emit:
     bigbed          = ch_bigbed                                   // channel: [ val(meta), bigbed ]
-    features_bed    = BIGBED_TO_BED.out.bed                       // channel: [ val(meta), bed ]
+    features_bed    = normalised.ok                       // channel: [ val(meta), bed ]
     chrom_report    = BIGBED_TO_BED.out.report                    // channel: [ val(meta), tsv ]
     all             = PEAK_FEATURE_INTERSECT.out.all              // channel: [ val(meta), val(feature), tsv ]
     covered         = PEAK_FEATURE_INTERSECT.out.covered          // channel: [ val(meta), val(feature), tsv ]

@@ -1,8 +1,10 @@
 /*
  * Allocate multi-mapped reads with Allo (https://github.com/seqcode/allo)
  *
- * Input : raw, read-name-grouped SAM produced by Bowtie2 (-k N) + samtools collate
- * Output: Allo SAM (one alignment per read / pair, allocated multi-mappers tagged ZA/ZZ)
+ * Input : raw, read-name-grouped Bowtie2 (-k N) alignments from samtools collate (BAM; Allo converts it to SAM
+ *         internally in a temporary folder that it deletes)
+ * Output: Allo alignments (one per read / pair, allocated multi-mappers tagged ZA/ZZ), compressed to BAM
+ *         inside the task so the large uncompressed SAM does not stay in the work directory
  *
  * NOTE: the 'container' and 'conda' directives for this process are intentionally NOT declared here.
  *       They are set in conf/modules.config so that '--allo_use_local' can remove them entirely and
@@ -14,10 +16,10 @@ process ALLO {
     label 'process_high'
 
     input:
-    tuple val(meta), path(sam)
+    tuple val(meta), path(collated)
 
     output:
-    tuple val(meta), path("*.allo.sam")   , emit: sam
+    tuple val(meta), path("*.allo.bam")   , emit: bam
     tuple val(meta), path("*.allo.log")   , emit: log
     tuple val(meta), path("*.allo_mqc.tsv"), emit: mqc
     path "versions.yml"                   , emit: versions
@@ -34,7 +36,7 @@ process ALLO {
     // so memory grows with the worker count. Cap it (--allo_max_workers) and halve it on each retry.
     def max_workers = params.allo_max_workers ? (params.allo_max_workers as int) : task.cpus
     def workers     = Math.max(1, (Math.min(task.cpus as int, max_workers) / (1 << (task.attempt - 1))) as int)
-    if ("${sam}" == "${prefix}.allo.sam") error "Input and output names are the same, use \"task.ext.prefix\" to disambiguate!"
+    if ("${collated}" == "${prefix}.allo.bam") error "Input and output names are the same, use \"task.ext.prefix\" to disambiguate!"
     """
     if ! command -v allo >/dev/null 2>&1; then
         echo "ERROR: 'allo' executable not found. Either pass --allo_container / use -profile conda, or install Allo locally (pip install bio-allo keras) when using --allo_use_local." >&2
@@ -65,7 +67,7 @@ process ALLO {
 
     set +e
     allo \\
-        $sam \\
+        $collated \\
         -seq $seq \\
         -p $workers \\
         -o ${prefix}.allo.sam \\
@@ -97,6 +99,11 @@ process ALLO {
         exit 1
     fi
 
+    # Compress Allo's SAM output to BAM with pysam (always present: Allo depends on it) and drop the SAM
+    ALLO_PY=\$(head -n 1 "\$(command -v allo)" | sed 's/^#![[:space:]]*//')
+    \$ALLO_PY -c "import sys, pysam; i = pysam.AlignmentFile(sys.argv[1]); o = pysam.AlignmentFile(sys.argv[2], 'wb', template=i); [o.write(r) for r in i]; o.close(); i.close()" ${prefix}.allo.sam ${prefix}.allo.bam
+    rm -f ${prefix}.allo.sam
+
     # MultiQC custom content (one row per library, headers are added when the files are collated)
     awk -v s="${meta.id}" -v unit="$unit" '
         /Total uniquely mapped/              { split(\$0,a,": "); um=a[2] }
@@ -118,7 +125,7 @@ process ALLO {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch ${prefix}.allo.sam ${prefix}.allo.log
+    touch ${prefix}.allo.bam ${prefix}.allo.log
     printf "${meta.id}\\treads\\t0\\t0\\t0\\t0\\t0\\n" > ${prefix}.allo_mqc.tsv
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

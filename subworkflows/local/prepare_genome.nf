@@ -134,6 +134,13 @@ workflow PREPARE_GENOME {
         )
         ch_versions       = ch_versions.mix(RENAME_CHROMS.out.versions.first())
         ch_rename_reports = RENAME_CHROMS.out.report
+        RENAME_CHROMS.out.report
+            .filter { meta, rep -> meta.id == 'fasta' }
+            .subscribe { meta, rep ->
+                if (!(rep.text =~ /\t(renamed|already_target)\t/)) {
+                    log.warn "[--chrom_alias] none of the genome FASTA sequence names are in ${params.chrom_alias}; the original names were kept. Check that the alias table belongs to this assembly (set --chrom_names_strict true to stop the run instead)."
+                }
+            }
 
         def renamed  = RENAME_CHROMS.out.renamed.branch { meta, f ->
             fasta:     meta.id == 'fasta'

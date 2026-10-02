@@ -1,5 +1,6 @@
 /*
- * Group raw Bowtie2 alignments by read name (required by Allo) and write them as SAM
+ * Group raw Bowtie2 alignments by read name (required by Allo). Written as compressed BAM to save space:
+ * Allo converts its input to SAM internally (in a temporary folder it deletes), so results are identical.
  */
 process SAMTOOLS_COLLATE {
     tag "$meta.id"
@@ -14,7 +15,7 @@ process SAMTOOLS_COLLATE {
     tuple val(meta), path(input)
 
     output:
-    tuple val(meta), path("*.collate.sam"), emit: sam
+    tuple val(meta), path("*.collate.bam"), emit: bam
     path "versions.yml"                   , emit: versions
 
     when:
@@ -30,8 +31,8 @@ process SAMTOOLS_COLLATE {
         $args \\
         -@ $task.cpus \\
         -T ./collate_tmp \\
-        --output-fmt SAM \\
-        -o ${prefix}.collate.sam \\
+        --output-fmt BAM \\
+        -o ${prefix}.collate.bam \\
         $input
 
     cat <<-END_VERSIONS > versions.yml
@@ -43,7 +44,7 @@ process SAMTOOLS_COLLATE {
     stub:
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
-    touch ${prefix}.collate.sam
+    touch ${prefix}.collate.bam
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         samtools: 1.20

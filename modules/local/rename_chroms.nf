@@ -35,7 +35,8 @@ process RENAME_CHROMS {
         renamed/$name \\
         --format $format \\
         --column '$column' \\
-        --report ${meta.id}.rename_report.tsv
+        --report ${meta.id}.rename_report.tsv \\
+        ${params.chrom_names_strict ? '' : '--allow_none'}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
