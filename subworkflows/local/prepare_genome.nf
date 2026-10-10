@@ -7,7 +7,8 @@ include {
     GUNZIP as GUNZIP_GTF
     GUNZIP as GUNZIP_GFF
     GUNZIP as GUNZIP_GENE_BED
-    GUNZIP as GUNZIP_BLACKLIST } from '../../modules/nf-core/gunzip/main'
+    GUNZIP as GUNZIP_BLACKLIST
+    GUNZIP as GUNZIP_VIRAL     } from '../../modules/nf-core/gunzip/main'
 
 include {
     UNTAR as UNTAR_BWA_INDEX
@@ -18,6 +19,8 @@ include { UNTARFILES           } from '../../modules/nf-core/untarfiles/main'
 include { GFFREAD              } from '../../modules/nf-core/gffread/main'
 include { CUSTOM_GETCHROMSIZES } from '../../modules/nf-core/custom/getchromsizes/main'
 include { RENAME_CHROMS        } from '../../modules/local/rename_chroms'
+include { COMBINE_VIRAL_GENOME } from '../../modules/local/combine_viral_genome'
+include { BOWTIE2_INDEX_CHECK  } from '../../modules/local/bowtie2_index_check'
 include { BWA_INDEX            } from '../../modules/nf-core/bwa/index/main'
 include { BOWTIE2_BUILD        } from '../../modules/nf-core/bowtie2/build/main'
 include { CHROMAP_INDEX        } from '../../modules/nf-core/chromap/index/main'
@@ -155,6 +158,38 @@ workflow PREPARE_GENOME {
     }
 
     //
+    // Optionally append viral genome(s) (--viral_fasta) to the renamed host genome. Everything below - chromosome
+    // sizes, aligner index, peak FASTA extraction - then uses the combined genome; the viral sequences are left out of
+    // the include-regions BED so the filtered BAM and all host analyses only contain host reads.
+    //
+    ch_host_fasta    = ch_fasta
+    ch_viral_contigs = Channel.empty()
+    if (params.viral_fasta) {
+        def ch_viral = Channel.value(file(params.viral_fasta, checkIfExists: true))
+        if (params.viral_fasta.toString().endsWith('.gz')) {
+            ch_viral    = GUNZIP_VIRAL ( ch_viral.map { [ [:], it ] } ).gunzip.map { it[1] }
+            ch_versions = ch_versions.mix(GUNZIP_VIRAL.out.versions)
+        }
+        COMBINE_VIRAL_GENOME ( ch_fasta, ch_viral )
+        ch_fasta         = COMBINE_VIRAL_GENOME.out.fasta
+        ch_viral_contigs = COMBINE_VIRAL_GENOME.out.contigs
+        ch_versions      = ch_versions.mix(COMBINE_VIRAL_GENOME.out.versions)
+    }
+
+    //
+    // Whole sequences to keep out of the filtered BAM: viral genomes and --exclude_contigs (e.g. chrM)
+    //
+    def exclude_names = params.exclude_contigs ? params.exclude_contigs.toString().tokenize(',')*.trim().findAll { it } : []
+    ch_exclude = Channel.empty()
+    if (params.viral_fasta || exclude_names) {
+        ch_exclude = ch_viral_contigs
+            .map { f -> f.readLines().findAll { it.trim() }.collect { it.tokenize('\t')[0] } }
+            .ifEmpty([])
+            .map { viral -> (viral + exclude_names).unique().join('\n') + '\n' }
+            .collectFile(name: 'exclude_contigs.txt')
+    }
+
+    //
     // Create chromosome sizes file
     //
     CUSTOM_GETCHROMSIZES ( ch_fasta.map { [ [:], it ] } )
@@ -169,7 +204,8 @@ workflow PREPARE_GENOME {
 
     GENOME_BLACKLIST_REGIONS (
         ch_chrom_sizes,
-        ch_blacklist.ifEmpty([])
+        ch_blacklist.ifEmpty([]),
+        ch_exclude.ifEmpty([])
     )
     ch_genome_filtered_bed = GENOME_BLACKLIST_REGIONS.out.bed
     ch_versions = ch_versions.mix(GENOME_BLACKLIST_REGIONS.out.versions)
@@ -202,7 +238,18 @@ workflow PREPARE_GENOME {
                 ch_bowtie2_index = UNTAR_BOWTIE2_INDEX ( [ [:], bowtie2_index ] ).untar
                 ch_versions  = ch_versions.mix(UNTAR_BOWTIE2_INDEX.out.versions)
             } else {
-                ch_bowtie2_index = [ [:], file(bowtie2_index) ]
+                ch_bowtie2_index = Channel.value([ [:], file(bowtie2_index) ])
+            }
+            //
+            // A pre-built index used with --viral_fasta must contain the viral sequences: check before aligning
+            //
+            if (params.viral_fasta) {
+                BOWTIE2_INDEX_CHECK ( ch_bowtie2_index, ch_fai )
+                ch_versions      = ch_versions.mix(BOWTIE2_INDEX_CHECK.out.versions)
+                ch_bowtie2_index = ch_bowtie2_index
+                    .combine(BOWTIE2_INDEX_CHECK.out.report)
+                    .map { meta, index, report -> [ meta, index ] }
+                    .first()
             }
         } else {
             ch_bowtie2_index = BOWTIE2_BUILD ( ch_fasta.map { [ [:], it ] } ).index
@@ -248,7 +295,9 @@ workflow PREPARE_GENOME {
 
     emit:
     rename_reports   = ch_rename_reports             // channel: [ val(meta), tsv ]
-    fasta         = ch_fasta                  //    path: genome.fasta
+    fasta         = ch_fasta                  //    path: genome.fasta (host + viral genomes with --viral_fasta)
+    host_fasta    = ch_host_fasta             //    path: host genome.fasta (renamed, without viral genomes)
+    viral_contigs = ch_viral_contigs          //    path: viral_contigs.tsv (name, length, description)
     fai           = ch_fai                    //    path: genome.fai
     gtf           = ch_gtf                    //    path: genome.gtf
     gene_bed      = ch_gene_bed               //    path: gene.bed

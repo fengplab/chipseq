@@ -155,6 +155,21 @@ def validateInputParameters() {
         }
     }
 
+    if (params.viral_fasta && !(params.viral_fasta instanceof CharSequence)) {
+        error("'--viral_fasta' must be the path to a FASTA file of viral genome(s), not '${params.viral_fasta}'.")
+    }
+    if (params.exclude_contigs != null && !(params.exclude_contigs instanceof CharSequence)) {
+        error("'--exclude_contigs' must be a comma-separated list of sequence names, e.g. --exclude_contigs 'chrM'.")
+    }
+    if (params.viral_fasta && params.aligner == 'bowtie2' && params.bowtie2_index) {
+        log.info "[--viral_fasta] a pre-built --bowtie2_index was given: it will be checked to contain every viral sequence."
+    } else if (params.viral_fasta) {
+        def prebuilt = [ 'bwa_index', 'chromap_index', 'star_index' ].findAll { params[it] && it.startsWith(params.aligner) }
+        if (prebuilt) {
+            log.warn "[--viral_fasta] a pre-built --${prebuilt[0]} was given: make sure it was built from the combined host + viral FASTA, otherwise no reads can align to the viral genomes."
+        }
+    }
+
     if (params.allo_args != null && !(params.allo_args instanceof CharSequence)) {
         error("'--allo_args' was read as '${params.allo_args}' instead of a list of Allo options. On the command line, Nextflow treats a value starting with '--' as a separate option: write it as --allo_args='--remove-zeros' (or set allo_args: '--remove-zeros' in the params file).")
     }

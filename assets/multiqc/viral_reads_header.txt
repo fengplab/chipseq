@@ -1,0 +1,42 @@
+# id: 'viral_reads'
+# section_name: 'MERGED LIB: Viral reads'
+# description: "shows reads aligned to each viral genome given with <code>--viral_fasta</code>, counted in the duplicate-marked merged-library BAM (primary alignments; both mates of a pair count). Viral reads are excluded from peak calling and all other host analyses. Mock/uninfected samples should be close to zero."
+# plot_type: 'table'
+# pconfig:
+#     id: 'viral_reads_table'
+#     title: 'Viral reads per sample'
+#     namespace: 'Viral'
+#     sort_rows: false
+# headers:
+#     Sample:
+#         title: 'Sample'
+#     Virus:
+#         title: 'Virus'
+#     Reads:
+#         title: 'Reads'
+#         description: 'Reads aligned to this viral genome (duplicates included)'
+#         format: '{:,.0f}'
+#     Reads (dedup):
+#         title: 'Reads (dedup)'
+#         description: 'Reads aligned to this viral genome after removing duplicates'
+#         format: '{:,.0f}'
+#     % of mapped:
+#         title: '% of mapped'
+#         description: 'Viral reads as a percentage of all mapped reads (host + viral) in the library'
+#         format: '{:,.4f}'
+#         suffix: '%'
+#     RPM:
+#         title: 'RPM'
+#         description: 'De-duplicated viral reads per million de-duplicated mapped reads'
+#         format: '{:,.2f}'
+#     Mean depth:
+#         title: 'Mean depth'
+#         description: 'Mean read depth across the viral genome (duplicates excluded)'
+#         format: '{:,.2f}'
+#     % covered:
+#         title: '% covered'
+#         description: 'Percentage of the viral genome covered by at least one read (duplicates excluded)'
+#         max: 100
+#         min: 0
+#         suffix: '%'
+Sample | virus	Sample	Virus	Reads	Reads (dedup)	% of mapped	RPM	Mean depth	% covered

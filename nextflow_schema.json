@@ -192,6 +192,21 @@
                     "description": "Chromosome alias table used to rename the chromosomes of the genome FASTA, GTF, gene BED and blacklist before indexing (e.g. UCSC hs1.chromAlias.txt to convert RefSeq 'NC_060925.1' to 'chr1'). All outputs then use the new names.",
                     "help_text": "Every name on a line of the table is treated as an equivalent name; sequences are renamed to the name in '--chrom_alias_column'. Names not in the table are kept and reported in genome/chrom_rename/. Cannot be combined with a pre-built aligner index."
                 },
+                "viral_fasta": {
+                    "type": "string",
+                    "format": "file-path",
+                    "exists": true,
+                    "pattern": "^\\S+\\.(fa|fasta|fna)(\\.gz)?$",
+                    "fa_icon": "fas fa-virus",
+                    "description": "FASTA with one or more viral genomes to add to the host genome. Reads are aligned to host and viral sequences together; viral reads are counted per virus and kept out of all host analyses.",
+                    "help_text": "The viral sequences are appended to the (renamed) host FASTA and indexed together, so viral reads cannot be misplaced on similar host sequence and multi-mapped reads are allocated across both. After duplicate marking, reads on viral sequences are summarised per sample and virus (<aligner>/merged_library/viral/, MultiQC 'Viral reads' table) and written to a separate BAM; the filtered BAM used for peak calling, bigWigs, FRiP, consensus peaks and annotation contains host reads only. Sequence names are the first word of each FASTA header and must not clash with host names. --chrom_alias is applied to the host genome only. A pre-built --bowtie2_index must have been built from the combined FASTA (it is checked)."
+                },
+                "exclude_contigs": {
+                    "type": "string",
+                    "fa_icon": "fas fa-cut",
+                    "description": "Comma-separated sequence names (e.g. 'chrM') to remove from the filtered BAM, like a blacklist covering whole sequences. Their reads stay in the duplicate-marked BAM and its statistics.",
+                    "help_text": "Removed sequences are left out of peak calling, bigWigs, FRiP, consensus peaks and all annotation. Names refer to the final (renamed) sequence names. Names not found in the genome are reported and ignored."
+                },
                 "chrom_alias_column": {
                     "type": "string",
                     "default": "ucsc",

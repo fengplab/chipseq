@@ -150,6 +150,25 @@ The [Preseq](http://smithlabresearch.org/software/preseq/) package is aimed at p
 
 ![MultiQC - Preseq library complexity plot](images/mqc_preseq_plot.png)
 
+### Viral reads (`--viral_fasta`)
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `<ALIGNER>/merged_library/viral/`
+  - `<SAMPLE>.viral_reads.tsv`: per virus: length, reads, de-duplicated reads, % of all mapped reads, de-duplicated reads per million, mean depth and % of the genome covered (duplicates excluded), FASTA description.
+  - `viral_reads_mqc.tsv`: all samples, as shown in the MultiQC 'Viral reads' table.
+- `<ALIGNER>/merged_library/viral/bam/`
+  - `<SAMPLE>.viral.bam`, `.bai`: reads aligned to the viral genomes (duplicate-marked, all alignments).
+- `genome/viral/`
+  - `viral_contigs.tsv`: viral sequence names, lengths and FASTA descriptions.
+  - `<host>.with_<viral>.fa`: combined genome (with `--save_reference`).
+  - `bowtie2_index_check.txt`: result of checking a pre-built `--bowtie2_index` for the viral sequences.
+
+</details>
+
+Reads are counted in the duplicate-marked merged-library BAM (primary alignments, QC-passed; both mates of a pair count). Viral sequences are not part of the filtered BAM, so they appear in no other output.
+
 ### Normalised bigWig files
 
 <details markdown="1">

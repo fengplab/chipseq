@@ -48,6 +48,7 @@ include { DEEPTOOLS_PLOTPROFILE         } from '../modules/nf-core/deeptools/plo
 include { DEEPTOOLS_PLOTHEATMAP         } from '../modules/nf-core/deeptools/plotheatmap/main'
 include { DEEPTOOLS_PLOTFINGERPRINT     } from '../modules/nf-core/deeptools/plotfingerprint/main'
 include { KHMER_UNIQUEKMERS             } from '../modules/nf-core/khmer/uniquekmers/main'
+include { VIRAL_READ_STATS              } from '../modules/local/viral_read_stats'
 
 //
 // SUBWORKFLOW: Consisting entirely of nf-core/modules
@@ -79,6 +80,7 @@ ch_peak_annotation_header   = file("$projectDir/assets/multiqc/peak_annotation_h
 ch_deseq2_pca_header        = Channel.value(file("$projectDir/assets/multiqc/deseq2_pca_header.txt", checkIfExists: true))
 ch_deseq2_clustering_header = Channel.value(file("$projectDir/assets/multiqc/deseq2_clustering_header.txt", checkIfExists: true))
 ch_allo_header              = file("$projectDir/assets/multiqc/allo_header.txt", checkIfExists: true)
+ch_viral_reads_header       = file("$projectDir/assets/multiqc/viral_reads_header.txt", checkIfExists: true)
 
 // Save AWS IGenomes file containing annotation version
 def anno_readme = params.genomes[ params.genome ]?.readme
@@ -106,6 +108,8 @@ workflow CHIPSEQ {
     ch_bowtie2_index // channel: path(bowtie2/index)
     ch_chromap_index // channel: path(chromap.index)
     ch_star_index    // channel: path(star/index/)
+    ch_host_fasta    // channel: path(host genome.fa) - same as ch_fasta unless --viral_fasta is used
+    ch_viral_contigs // channel: path(viral_contigs.tsv) - empty unless --viral_fasta is used
 
     main:
     ch_multiqc_files = Channel.empty()
@@ -310,6 +314,28 @@ workflow CHIPSEQ {
     ch_versions = ch_versions.mix(BAM_FILTER_BAMTOOLS.out.versions)
 
     //
+    // MODULE: Count and extract reads on viral genomes (--viral_fasta). The filtered BAM above excludes the viral
+    // sequences, so viral reads are summarised here from the duplicate-marked BAM.
+    //
+    ch_viral_multiqc = Channel.empty()
+    if (params.viral_fasta) {
+        VIRAL_READ_STATS (
+            BAM_MARKDUPLICATES_PICARD.out.bam
+                .join(BAM_MARKDUPLICATES_PICARD.out.bai, by: [0])
+                .join(BAM_MARKDUPLICATES_PICARD.out.flagstat, by: [0]),
+            ch_viral_contigs
+        )
+        ch_versions = ch_versions.mix(VIRAL_READ_STATS.out.versions.first())
+
+        VIRAL_READ_STATS
+            .out
+            .mqc
+            .map { meta, tsv -> tsv }
+            .collectFile(name: 'viral_reads_mqc.tsv', seed: ch_viral_reads_header.text, sort: true, storeDir: "${params.outdir}/${params.aligner}/merged_library/viral")
+            .set { ch_viral_multiqc }
+    }
+
+    //
     // MODULE: Preseq coverage analysis
     //
     ch_preseq_multiqc = Channel.empty()
@@ -458,7 +484,7 @@ workflow CHIPSEQ {
     ch_macs_gsize = params.macs_gsize
     if (!params.macs_gsize) {
         KHMER_UNIQUEKMERS (
-            ch_fasta,
+            ch_host_fasta,
             params.read_length
         )
         ch_macs_gsize = KHMER_UNIQUEKMERS.out.kmers.map { it.text.trim() }
@@ -636,6 +662,7 @@ workflow CHIPSEQ {
         ch_multiqc_files = ch_multiqc_files.mix(ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'))
         ch_multiqc_files = ch_multiqc_files.mix(ch_collated_versions)
         ch_multiqc_files = ch_multiqc_files.mix(ch_allo_multiqc)
+        ch_multiqc_files = ch_multiqc_files.mix(ch_viral_multiqc)
         ch_multiqc_files = ch_multiqc_files.mix(ch_feature_annotation_multiqc)
         ch_multiqc_files = ch_multiqc_files.mix(ch_differential_multiqc)
 

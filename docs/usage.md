@@ -141,6 +141,25 @@ The FASTA, GTF (also when converted from `--gff`), gene BED and blacklist are re
 
 **Unmatched chromosome names.** By default (`--chrom_names_strict false`) a mismatch does not stop the run: if no FASTA sequence is found in `--chrom_alias`, the original names are kept; if a RepeatMasker/CenSat feature set has no chromosome in common with the genome (e.g. human tracks on a mouse genome), that feature set is skipped. Both cases are reported as warnings in the Nextflow log and in the `genome/chrom_rename/` and `genome/annotation/*.chrom_report.tsv` reports. Set `--chrom_names_strict true` to stop the run instead. Sequence names that would collapse onto the same new name always stop the run.
 
+### Aligning to viral genomes together with the host (`--viral_fasta`)
+
+To measure viral DNA in each library, give a FASTA with one or more viral genomes:
+
+```bash
+    --viral_fasta viruses.fa ...
+```
+
+The viral sequences are appended to the host genome (after `--chrom_alias` renaming, which applies to the host only) and indexed together. Aligning to both at once means viral reads cannot be placed on similar host sequence, and reads that fit both are allocated like any other multi-mapped read (Allo, `--with_allo`).
+
+- **Viral reads are kept out of every host analysis.** The viral sequences are left out of the include-regions BED used to filter the merged-library BAM, so peak calling, FRiP, bigWig scaling, consensus peaks, HOMER, XSTREME and the RepeatMasker/CenSat annotation see host reads only. This matters because inputs from uninfected cells contain no viral reads, and because viral reads would otherwise change the read totals used for peak calling and normalisation.
+- **Viral reads are summarised per sample and virus** from the duplicate-marked BAM: reads, de-duplicated reads, % of all mapped reads, reads per million, mean depth and % of the viral genome covered (`<aligner>/merged_library/viral/`, MultiQC table 'Viral reads'). Viral reads are also written to `<sample>.viral.bam` for viewing in IGV. Mock/uninfected samples should show close to zero viral reads.
+- **One panel FASTA for all viruses** is recommended: every batch then shares one combined index, and samples of other conditions act as contamination controls. Sequence names are the first word of each header and must be unique and must not match a host name (the run stops otherwise). DNA ChIP can only capture viruses with a DNA genome or DNA stage (e.g. adenovirus, herpesviruses, integrated/unintegrated HIV-1 DNA).
+- **Index reuse:** the combined genome and its index are named `<host>.with_<viral file>`. To build the index once, run one batch with `--save_reference` and pass `genome/index/bowtie2` as `--bowtie2_index` (together with the same `--viral_fasta`, and the renamed host FASTA from `genome/renamed/` instead of `--chrom_alias`) in later runs. A pre-built Bowtie2 index is checked to contain every viral sequence before alignment starts.
+
+### Leaving whole sequences out of the analysis (`--exclude_contigs`)
+
+`--exclude_contigs 'chrM'` (comma-separated, final sequence names) removes whole sequences from the filtered BAM, like a blacklist that covers them completely: they are left out of peak calling, bigWigs, FRiP and annotation, but their reads remain in the duplicate-marked BAM and its statistics. Names not found in the genome are reported and ignored.
+
 ## Optional analyses added to this version
 
 All four additions are off by default.
