@@ -155,6 +155,10 @@ def validateInputParameters() {
         }
     }
 
+    if (params.allo_args != null && !(params.allo_args instanceof CharSequence)) {
+        error("'--allo_args' was read as '${params.allo_args}' instead of a list of Allo options. On the command line, Nextflow treats a value starting with '--' as a separate option: write it as --allo_args='--remove-zeros' (or set allo_args: '--remove-zeros' in the params file).")
+    }
+
     if (params.with_allo && params.aligner != 'bowtie2') {
         error("'--with_allo' is only supported with '--aligner bowtie2' (Allo needs Bowtie2 multi-mapped read output).")
     }

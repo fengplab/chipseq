@@ -30,8 +30,11 @@ process ALLO {
     script:
     def args   = task.ext.args   ?: ''
     def prefix = task.ext.prefix ?: "${meta.id}"
-    def seq    = meta.single_end ? 'se' : 'pe'
-    def unit   = meta.single_end ? 'reads' : 'pairs'
+    // Allo is always run in paired-end mode; single-end libraries are rejected before alignment
+    // (see FASTQ_ALIGN_BOWTIE2_ALLO), this is a second safeguard
+    if (meta.single_end) error "Allo is configured to always run in paired-end mode, but library '${meta.id}' is single-end."
+    def seq    = 'pe'
+    def unit   = 'pairs'
     // Every Allo worker loads TensorFlow + the CNN and receives a full copy of the genome-wide read landscape,
     // so memory grows with the worker count. Cap it (--allo_max_workers) and halve it on each retry.
     def max_workers = params.allo_max_workers ? (params.allo_max_workers as int) : task.cpus
@@ -101,19 +104,22 @@ process ALLO {
 
     # Compress Allo's SAM output to BAM with pysam (always present: Allo depends on it) and drop the SAM
     ALLO_PY=\$(head -n 1 "\$(command -v allo)" | sed 's/^#![[:space:]]*//')
-    \$ALLO_PY -c "import sys, pysam; i = pysam.AlignmentFile(sys.argv[1]); o = pysam.AlignmentFile(sys.argv[2], 'wb', template=i); [o.write(r) for r in i]; o.close(); i.close()" ${prefix}.allo.sam ${prefix}.allo.bam
+    # ...and count the multi-mapped pairs Allo actually kept (ZA/ZZ-tagged). Allo's own 'pairs allocated'
+    # count also includes pairs discarded afterwards when --remove-zeros is given via --allo_args.
+    \$ALLO_PY -c "import sys, pysam; i = pysam.AlignmentFile(sys.argv[1]); o = pysam.AlignmentFile(sys.argv[2], 'wb', template=i); n = sum((o.write(r), (r.has_tag('ZA') or r.has_tag('ZZ')) and r.is_read1)[1] for r in i); o.close(); i.close(); open(sys.argv[3], 'w').write(str(n))" ${prefix}.allo.sam ${prefix}.allo.bam kept_mmr.txt
     rm -f ${prefix}.allo.sam
 
     # MultiQC custom content (one row per library, headers are added when the files are collated)
-    awk -v s="${meta.id}" -v unit="$unit" '
+    awk -v s="${meta.id}" -v unit="$unit" -v kept=\$(cat kept_mmr.txt) '
         /Total uniquely mapped/              { split(\$0,a,": "); um=a[2] }
-        /Total number of (reads|pairs) allocated/ { split(\$0,a,": "); al=a[2] }
+        /Total number of (reads|pairs) allocated/ { split(\$0,a,": "); proc=a[2] }
         /Total number of reads filtered/     { split(\$0,a,": "); fi=a[2] }
         /Average number of alignments/       { split(\$0,a,": "); av=a[2] }
         END {
-            tot = um + al
-            pct = (tot > 0) ? sprintf("%.2f", 100 * al / tot) : "0"
-            printf "%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n", s, unit, um, al, pct, fi, av
+            removed = proc - kept; if (removed < 0) removed = 0
+            tot = um + kept
+            pct = (tot > 0) ? sprintf("%.2f", 100 * kept / tot) : "0"
+            printf "%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\t%s\\n", s, unit, um, kept, pct, removed, fi, av
         }' ${prefix}.allo.log > ${prefix}.allo_mqc.tsv
 
     cat <<-END_VERSIONS > versions.yml
@@ -126,7 +132,7 @@ process ALLO {
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
     touch ${prefix}.allo.bam ${prefix}.allo.log
-    printf "${meta.id}\\treads\\t0\\t0\\t0\\t0\\t0\\n" > ${prefix}.allo_mqc.tsv
+    printf "${meta.id}\\tpairs\\t0\\t0\\t0\\t0\\t0\\t0\\n" > ${prefix}.allo_mqc.tsv
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
         allo: 1.2.0

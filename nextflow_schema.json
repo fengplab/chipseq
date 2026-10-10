@@ -329,7 +329,7 @@
                 "with_allo": {
                     "type": "boolean",
                     "fa_icon": "fas fa-random",
-                    "description": "Run Bowtie2 with -k and allocate multi-mapped reads with Allo (--mixed) before merging/filtering. Downstream steps use the Allo alignments.",
+                    "description": "Run Bowtie2 with -k and allocate multi-mapped reads with Allo (always paired-end, --mixed) before merging/filtering. Downstream steps use the Allo alignments.",
                     "help_text": "Requires '--aligner bowtie2'. Raw Bowtie2 alignments are grouped by read name with samtools collate and passed to Allo as SAM. Allocated reads are made primary and the BAMTools MAPQ filter is disabled so that rescued reads are retained."
                 },
                 "allo_max_alignments": {
@@ -355,7 +355,7 @@
                 "allo_args": {
                     "type": "string",
                     "fa_icon": "fas fa-terminal",
-                    "description": "Extra arguments passed to Allo (in addition to --mixed), e.g. '--remove-zeros' or '-max 10'."
+                    "description": "Extra arguments passed to Allo (in addition to the fixed -seq pe --mixed), e.g. '--remove-zeros', '-max 10' or '--keep-unmap'."
                 },
                 "allo_random_control": {
                     "type": "boolean",
@@ -401,6 +401,12 @@
                     "type": "number",
                     "description": "p-value cutoff for peak detection, --macs_fdr and --macs_pvalue are mutually exclusive. If --macs_pvalue cutoff is set, q-value will not be calculated and reported as -1 in the final .xls file.",
                     "fa_icon": "fas fa-sort-amount-down"
+                },
+                "macs_fe_cutoff": {
+                    "type": "number",
+                    "minimum": 1,
+                    "description": "Minimum fold enrichment over the control (at the peak summit) for MACS3 to report a peak (MACS3 --fe-cutoff). Applied in addition to the q-value/p-value cutoff. MACS3 adds 1 as a pseudocount when computing fold enrichment. Default: not set (MACS3 uses 1, i.e. no filtering).",
+                    "fa_icon": "fas fa-sort-amount-up"
                 },
                 "min_reps_consensus": {
                     "type": "integer",

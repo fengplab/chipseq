@@ -25,6 +25,16 @@ workflow FASTQ_ALIGN_BOWTIE2_ALLO {
     ch_versions = Channel.empty()
 
     //
+    // Allo is always run in paired-end mode: stop before alignment if any library is single-end
+    //
+    ch_reads = ch_reads.map { meta, reads ->
+        if (meta.single_end) {
+            error("'--with_allo' always runs Allo in paired-end mode, but library '${meta.id}' is single-end. Remove single-end samples from the samplesheet or run without '--with_allo'.")
+        }
+        [ meta, reads ]
+    }
+
+    //
     // Map reads with Bowtie2 keeping up to N alignments per read. Output is left unsorted
     // (Bowtie2 emits all alignments of a read/pair contiguously).
     //
