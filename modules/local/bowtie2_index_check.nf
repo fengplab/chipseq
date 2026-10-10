@@ -30,7 +30,7 @@ process BOWTIE2_INDEX_CHECK {
 
     bowtie2-inspect -n "\$INDEX" | awk '{print \$1}' | sort > index_names.txt
     cut -f1 $fai | sort > genome_names.txt
-    comm -13 index_names.txt genome_names.txt > missing.txt
+    awk 'NR==FNR { i[\$1]=1; next } !(\$1 in i)' index_names.txt genome_names.txt > missing.txt
     {
         echo "index sequences : \$(wc -l < index_names.txt)"
         echo "genome sequences: \$(wc -l < genome_names.txt)"

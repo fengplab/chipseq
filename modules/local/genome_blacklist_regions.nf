@@ -31,7 +31,7 @@ process GENOME_BLACKLIST_REGIONS {
         cut -f1 $exclude | sed '/^[[:space:]]*\$/d' | sort -u > exclude_names.txt
         awk 'NR==FNR { x[\$1]=1; next } !(\$1 in x)' exclude_names.txt $sizes > sizes.kept
         awk 'NR==FNR { x[\$1]=1; next } (\$1 in x) { print \$1 "\\t" \$2 }' exclude_names.txt $sizes > excluded_contigs.txt
-        missing=\$(awk 'NR==FNR { g[\$1]=1; next } !(\$1 in g)' $sizes exclude_names.txt | paste -sd, -)
+        missing=\$(awk 'NR==FNR { g[\$1]=1; next } !(\$1 in g) { m = m (m == "" ? "" : ",") \$1 } END { print m }' $sizes exclude_names.txt)
         [ -n "\$missing" ] && echo "WARNING: sequence(s) to exclude not found in the genome and ignored: \$missing" 1>&2
         [ -s sizes.kept ] || { echo "ERROR: every genome sequence was excluded" 1>&2; exit 1; }
         """ : "cp $sizes sizes.kept"
