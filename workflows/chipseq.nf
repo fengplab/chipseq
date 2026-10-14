@@ -48,7 +48,7 @@ include { DEEPTOOLS_PLOTPROFILE         } from '../modules/nf-core/deeptools/plo
 include { DEEPTOOLS_PLOTHEATMAP         } from '../modules/nf-core/deeptools/plotheatmap/main'
 include { DEEPTOOLS_PLOTFINGERPRINT     } from '../modules/nf-core/deeptools/plotfingerprint/main'
 include { KHMER_UNIQUEKMERS             } from '../modules/nf-core/khmer/uniquekmers/main'
-include { VIRAL_READ_STATS              } from '../modules/local/viral_read_stats'
+include { CONTIG_READ_STATS             } from '../modules/local/contig_read_stats'
 
 //
 // SUBWORKFLOW: Consisting entirely of nf-core/modules
@@ -80,7 +80,7 @@ ch_peak_annotation_header   = file("$projectDir/assets/multiqc/peak_annotation_h
 ch_deseq2_pca_header        = Channel.value(file("$projectDir/assets/multiqc/deseq2_pca_header.txt", checkIfExists: true))
 ch_deseq2_clustering_header = Channel.value(file("$projectDir/assets/multiqc/deseq2_clustering_header.txt", checkIfExists: true))
 ch_allo_header              = file("$projectDir/assets/multiqc/allo_header.txt", checkIfExists: true)
-ch_viral_reads_header       = file("$projectDir/assets/multiqc/viral_reads_header.txt", checkIfExists: true)
+ch_contig_reads_header      = file("$projectDir/assets/multiqc/contig_reads_header.txt", checkIfExists: true)
 
 // Save AWS IGenomes file containing annotation version
 def anno_readme = params.genomes[ params.genome ]?.readme
@@ -110,6 +110,7 @@ workflow CHIPSEQ {
     ch_star_index    // channel: path(star/index/)
     ch_host_fasta    // channel: path(host genome.fa) - same as ch_fasta unless --viral_fasta is used
     ch_viral_contigs // channel: path(viral_contigs.tsv) - empty unless --viral_fasta is used
+    ch_excluded_contigs // channel: path(excluded_contigs.txt) - viral + --exclude_contigs; empty if neither is used
 
     main:
     ch_multiqc_files = Channel.empty()
@@ -148,6 +149,7 @@ workflow CHIPSEQ {
     ch_samtools_stats    = Channel.empty()
     ch_samtools_flagstat = Channel.empty()
     ch_samtools_idxstats = Channel.empty()
+    ch_bowtie2_log       = Channel.empty()
     if (params.aligner == 'bwa') {
         FASTQ_ALIGN_BWA (
             FASTQ_FASTQC_UMITOOLS_TRIMGALORE.out.reads,
@@ -191,6 +193,7 @@ workflow CHIPSEQ {
         ch_samtools_flagstat = FASTQ_ALIGN_BOWTIE2_ALLO.out.flagstat
         ch_samtools_idxstats = FASTQ_ALIGN_BOWTIE2_ALLO.out.idxstats
         ch_allo_multiqc      = FASTQ_ALIGN_BOWTIE2_ALLO.out.allo_multiqc
+        ch_bowtie2_log       = FASTQ_ALIGN_BOWTIE2_ALLO.out.log_out
         ch_versions = ch_versions.mix(FASTQ_ALIGN_BOWTIE2_ALLO.out.versions)
     } else if (params.aligner == 'bowtie2') {
         FASTQ_ALIGN_BOWTIE2 (
@@ -208,6 +211,7 @@ workflow CHIPSEQ {
         ch_samtools_stats    = FASTQ_ALIGN_BOWTIE2.out.stats
         ch_samtools_flagstat = FASTQ_ALIGN_BOWTIE2.out.flagstat
         ch_samtools_idxstats = FASTQ_ALIGN_BOWTIE2.out.idxstats
+        ch_bowtie2_log       = FASTQ_ALIGN_BOWTIE2.out.log_out
         ch_versions = ch_versions.mix(FASTQ_ALIGN_BOWTIE2.out.versions)
     }
 
@@ -314,25 +318,43 @@ workflow CHIPSEQ {
     ch_versions = ch_versions.mix(BAM_FILTER_BAMTOOLS.out.versions)
 
     //
-    // MODULE: Count and extract reads on viral genomes (--viral_fasta). The filtered BAM above excludes the viral
-    // sequences, so viral reads are summarised here from the duplicate-marked BAM.
+    // MODULE: Count reads on the whole sequences left out of the filtered BAM above - viral genomes (--viral_fasta) and
+    // --exclude_contigs (e.g. chrM) - in the duplicate-marked BAM, as a percentage of all reads given to Bowtie2 after
+    // removing duplicates. Viral reads are also extracted to a BAM.
     //
-    ch_viral_multiqc = Channel.empty()
-    if (params.viral_fasta) {
-        VIRAL_READ_STATS (
-            BAM_MARKDUPLICATES_PICARD.out.bam
-                .join(BAM_MARKDUPLICATES_PICARD.out.bai, by: [0])
-                .join(BAM_MARKDUPLICATES_PICARD.out.flagstat, by: [0]),
-            ch_viral_contigs
-        )
-        ch_versions = ch_versions.mix(VIRAL_READ_STATS.out.versions.first())
+    ch_contig_multiqc = Channel.empty()
+    if (params.viral_fasta || params.exclude_contigs) {
+        if (params.aligner != 'bowtie2') {
+            error("Read statistics for --viral_fasta / --exclude_contigs take the total read count from the Bowtie2 logs, so they need '--aligner bowtie2' (got '${params.aligner}').")
+        }
 
-        VIRAL_READ_STATS
+        // Bowtie2 logs of every sequencing run merged into a library (same id rule as PICARD_MERGESAMFILES above)
+        ch_bowtie2_log
+            .map { meta, log -> [ meta.id - ~/_T\d+$/, log ] }
+            .groupTuple()
+            .set { ch_bowtie2_log_merged }
+
+        BAM_MARKDUPLICATES_PICARD.out.bam
+            .join(BAM_MARKDUPLICATES_PICARD.out.bai, by: [0], failOnMismatch: true)
+            .join(BAM_MARKDUPLICATES_PICARD.out.flagstat, by: [0], failOnMismatch: true)
+            .map { meta, bam, bai, flagstat -> [ meta.id, meta, bam, bai, flagstat ] }
+            .join(ch_bowtie2_log_merged, by: [0], failOnMismatch: true)
+            .map { _id, meta, bam, bai, flagstat, logs -> [ meta, bam, bai, flagstat, logs ] }
+            .set { ch_contig_stats_input }
+
+        CONTIG_READ_STATS (
+            ch_contig_stats_input,
+            ch_excluded_contigs.first(),
+            ch_viral_contigs.ifEmpty([]).first()
+        )
+        ch_versions = ch_versions.mix(CONTIG_READ_STATS.out.versions.first())
+
+        CONTIG_READ_STATS
             .out
             .mqc
             .map { meta, tsv -> tsv }
-            .collectFile(name: 'viral_reads_mqc.tsv', seed: ch_viral_reads_header.text, sort: true, storeDir: "${params.outdir}/${params.aligner}/merged_library/viral")
-            .set { ch_viral_multiqc }
+            .collectFile(name: 'contig_reads_mqc.tsv', seed: ch_contig_reads_header.text, sort: true, storeDir: "${params.outdir}/${params.aligner}/merged_library/contig_reads")
+            .set { ch_contig_multiqc }
     }
 
     //
@@ -662,7 +684,7 @@ workflow CHIPSEQ {
         ch_multiqc_files = ch_multiqc_files.mix(ch_workflow_summary.collectFile(name: 'workflow_summary_mqc.yaml'))
         ch_multiqc_files = ch_multiqc_files.mix(ch_collated_versions)
         ch_multiqc_files = ch_multiqc_files.mix(ch_allo_multiqc)
-        ch_multiqc_files = ch_multiqc_files.mix(ch_viral_multiqc)
+        ch_multiqc_files = ch_multiqc_files.mix(ch_contig_multiqc)
         ch_multiqc_files = ch_multiqc_files.mix(ch_feature_annotation_multiqc)
         ch_multiqc_files = ch_multiqc_files.mix(ch_differential_multiqc)
 

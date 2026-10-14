@@ -90,7 +90,8 @@ workflow NFCORE_CHIPSEQ {
         PREPARE_GENOME.out.chromap_index,
         PREPARE_GENOME.out.star_index,
         PREPARE_GENOME.out.host_fasta,
-        PREPARE_GENOME.out.viral_contigs
+        PREPARE_GENOME.out.viral_contigs,
+        PREPARE_GENOME.out.excluded_contigs
     )
 
     emit:

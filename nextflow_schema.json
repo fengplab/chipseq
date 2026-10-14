@@ -204,8 +204,8 @@
                 "exclude_contigs": {
                     "type": "string",
                     "fa_icon": "fas fa-cut",
-                    "description": "Comma-separated sequence names (e.g. 'chrM') to remove from the filtered BAM, like a blacklist covering whole sequences. Their reads stay in the duplicate-marked BAM and its statistics.",
-                    "help_text": "Removed sequences are left out of peak calling, bigWigs, FRiP, consensus peaks and all annotation. Names refer to the final (renamed) sequence names. Names not found in the genome are reported and ignored."
+                    "description": "Comma-separated sequence names (e.g. 'chrM') to remove from the filtered BAM, like a blacklist covering whole sequences. Their reads stay in the duplicate-marked BAM and are counted per sample (Bowtie2 only).",
+                    "help_text": "Removed sequences are left out of peak calling, bigWigs, FRiP, consensus peaks and all annotation. Names refer to the final (renamed) sequence names. Names not found in the genome stop the run. Reads on each removed sequence are reported per sample in <aligner>/merged_library/contig_reads/ as a percentage of all reads given to Bowtie2 after removing duplicates."
                 },
                 "chrom_alias_column": {
                     "type": "string",

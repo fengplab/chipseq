@@ -150,16 +150,23 @@ The [Preseq](http://smithlabresearch.org/software/preseq/) package is aimed at p
 
 ![MultiQC - Preseq library complexity plot](images/mqc_preseq_plot.png)
 
-### Viral reads (`--viral_fasta`)
+### Reads on viral genomes and excluded sequences (`--viral_fasta`, `--exclude_contigs`)
 
 <details markdown="1">
 <summary>Output files</summary>
 
-- `<ALIGNER>/merged_library/viral/`
-  - `<SAMPLE>.viral_reads.tsv`: per virus: length, reads, de-duplicated reads, % of all mapped reads, de-duplicated reads per million, mean depth and % of the genome covered (duplicates excluded), FASTA description.
-  - `viral_reads_mqc.tsv`: all samples, as shown in the MultiQC 'Viral reads' table.
-- `<ALIGNER>/merged_library/viral/bam/`
-  - `<SAMPLE>.viral.bam`, `.bai`: reads aligned to the viral genomes (duplicate-marked, all alignments).
+- `<ALIGNER>/merged_library/contig_reads/`
+  - `<SAMPLE>.contig_reads.tsv`: one row per viral genome (`--viral_fasta`) and per `--exclude_contigs` sequence (e.g. chrM). Columns:
+    - `sample`, `contig`, `contig_type` (`viral` or `excluded`), `length_bp`
+    - `total_reads`: reads given to Bowtie2 after trimming (2 x pairs + unpaired, from the Bowtie2 logs of every run merged into the library)
+    - `duplicates`: primary duplicate reads in the duplicate-marked BAM; `total_reads_dedup` = `total_reads` - `duplicates`
+    - `mapped_reads`: primary mapped reads in the duplicate-marked BAM (duplicates included)
+    - `reads`, `reads_dedup`: reads on the sequence, before and after removing duplicates
+    - `pct_of_total_reads_dedup` = 100 x `reads_dedup` / `total_reads_dedup`
+    - `mean_depth_dedup`, `pct_genome_covered`: depth and breadth (duplicates excluded); `description`: FASTA description (viral genomes)
+  - `contig_reads_mqc.tsv`: all samples, as shown in the MultiQC table 'Viral and excluded sequence reads'.
+- `<ALIGNER>/merged_library/contig_reads/viral_bam/`
+  - `<SAMPLE>.viral.bam`, `.bai`: reads aligned to the viral genomes (duplicate-marked, all alignments). No BAM is written for `--exclude_contigs` sequences.
 - `genome/viral/`
   - `viral_contigs.tsv`: viral sequence names, lengths and FASTA descriptions.
   - `<host>.with_<viral>.fa`: combined genome (with `--save_reference`).
@@ -167,7 +174,7 @@ The [Preseq](http://smithlabresearch.org/software/preseq/) package is aimed at p
 
 </details>
 
-Reads are counted in the duplicate-marked merged-library BAM (primary alignments, QC-passed; both mates of a pair count). Viral sequences are not part of the filtered BAM, so they appear in no other output.
+Reads are counted in the duplicate-marked merged-library BAM (primary alignments, QC-passed, supplementary excluded; both mates of a pair count). With `--with_allo`, multi-mapped reads count where Allo placed them (e.g. reads shared between chrM and nuclear mitochondrial insertions). The total comes from the Bowtie2 logs because Allo drops unaligned reads, so this table needs `--aligner bowtie2`. These sequences are not part of the filtered BAM, so they appear in no other output. Only whole sequences are reported: reads in `--blacklist` intervals are removed from the filtered BAM but not counted here.
 
 ### Normalised bigWig files
 

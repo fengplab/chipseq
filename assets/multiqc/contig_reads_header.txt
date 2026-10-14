@@ -1,0 +1,41 @@
+# id: 'contig_reads'
+# section_name: 'MERGED LIB: Viral and excluded sequence reads'
+# description: "shows reads on each viral genome (<code>--viral_fasta</code>) and each sequence given with <code>--exclude_contigs</code> (e.g. chrM), counted in the duplicate-marked merged-library BAM (primary alignments; both mates of a pair count). These sequences are excluded from peak calling and all other host analyses. '% of total (dedup)' = de-duplicated reads on the sequence / (all reads given to Bowtie2 - duplicates) x 100."
+# plot_type: 'table'
+# pconfig:
+#     id: 'contig_reads_table'
+#     title: 'Viral and excluded sequence reads per sample'
+#     namespace: 'Contig reads'
+#     sort_rows: false
+# headers:
+#     Sample:
+#         title: 'Sample'
+#     Sequence:
+#         title: 'Sequence'
+#     Type:
+#         title: 'Type'
+#         description: "'viral' (--viral_fasta) or 'excluded' (--exclude_contigs)"
+#     Reads:
+#         title: 'Reads'
+#         description: 'Reads aligned to this sequence (duplicates included)'
+#         format: '{:,.0f}'
+#     Reads (dedup):
+#         title: 'Reads (dedup)'
+#         description: 'Reads aligned to this sequence after removing duplicates'
+#         format: '{:,.0f}'
+#     % of total (dedup):
+#         title: '% of total (dedup)'
+#         description: 'De-duplicated reads on this sequence as a percentage of all reads given to Bowtie2 (from the Bowtie2 logs) minus duplicates'
+#         format: '{:,.6f}'
+#         suffix: '%'
+#     Mean depth:
+#         title: 'Mean depth'
+#         description: 'Mean read depth across the sequence (duplicates excluded)'
+#         format: '{:,.2f}'
+#     % covered:
+#         title: '% covered'
+#         description: 'Percentage of the sequence covered by at least one read (duplicates excluded)'
+#         max: 100
+#         min: 0
+#         suffix: '%'
+Sample | sequence	Sample	Sequence	Type	Reads	Reads (dedup)	% of total (dedup)	Mean depth	% covered

@@ -298,6 +298,7 @@ workflow PREPARE_GENOME {
     fasta         = ch_fasta                  //    path: genome.fasta (host + viral genomes with --viral_fasta)
     host_fasta    = ch_host_fasta             //    path: host genome.fasta (renamed, without viral genomes)
     viral_contigs = ch_viral_contigs          //    path: viral_contigs.tsv (name, length, description)
+    excluded_contigs = GENOME_BLACKLIST_REGIONS.out.excluded // path: excluded_contigs.txt (name, length): viral + --exclude_contigs
     fai           = ch_fai                    //    path: genome.fai
     gtf           = ch_gtf                    //    path: genome.gtf
     gene_bed      = ch_gene_bed               //    path: gene.bed

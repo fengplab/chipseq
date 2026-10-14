@@ -32,7 +32,10 @@ process GENOME_BLACKLIST_REGIONS {
         awk 'NR==FNR { x[\$1]=1; next } !(\$1 in x)' exclude_names.txt $sizes > sizes.kept
         awk 'NR==FNR { x[\$1]=1; next } (\$1 in x) { print \$1 "\\t" \$2 }' exclude_names.txt $sizes > excluded_contigs.txt
         missing=\$(awk 'NR==FNR { g[\$1]=1; next } !(\$1 in g) { m = m (m == "" ? "" : ",") \$1 } END { print m }' $sizes exclude_names.txt)
-        [ -n "\$missing" ] && echo "WARNING: sequence(s) to exclude not found in the genome and ignored: \$missing" 1>&2
+        if [ -n "\$missing" ]; then
+            echo "ERROR: sequence(s) to exclude not found in the genome (check --exclude_contigs against the FASTA names): \$missing" 1>&2
+            exit 1
+        fi
         [ -s sizes.kept ] || { echo "ERROR: every genome sequence was excluded" 1>&2; exit 1; }
         """ : "cp $sizes sizes.kept"
     if (blacklist) {
@@ -58,4 +61,15 @@ process GENOME_BLACKLIST_REGIONS {
         END_VERSIONS
         """
     }
+
+    stub:
+    def file_out = "${sizes.simpleName}.include_regions.bed"
+    """
+    touch $file_out
+    ${exclude ? 'touch excluded_contigs.txt' : ''}
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        bedtools: 2.30.0
+    END_VERSIONS
+    """
 }
